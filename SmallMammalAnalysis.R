@@ -1,20 +1,32 @@
-#####################
-# Plant data analysis
-#####################
+############################
+# Small mammal data analysis
+############################
 
 library(ape)
 library(picante)
+library(geiger)
 library(dplyr)
 
 #========================================
 # Calculating Phylogenetic Diversity (PD)
 #========================================
 
-# Load community data
-rawCom <- read.csv("../Data/Plant community data.csv")
+# Load mammal supertree
+mammal.supertree.phylos <- read.nexus("../Data/Mammal.supertree.nexus.txt")
 
-# Load phylogeny
-phylo <- read.tree("../Data/PlantPhylo")
+# Select the "bestDates" tree
+mammal.tree <- mammal.supertree.phylos$mammalST_bestDates
+
+# Load small mammal community data
+rawCom <- read.csv("../Data/Diurnal excluded com data.csv")
+
+# Prune supertree to only the sampled small taxa
+smammal <- as.matrix(t(rawCom))
+phylo <- treedata(mammal.tree, smammal)$phy
+
+# Warning returned from above command just says that not all taxa in the mammal 
+# supertree were found in our community sample
+plot(phylo, cex = 0.6)
 
 # Calculate PD (Evolutionary Heritage) for each site and store in data frame
 PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = T))
@@ -25,10 +37,11 @@ names(PDData)[1] <- "Site"
 #======================================
 
 # Load site data
-byPlot <- read.csv("../Data/Plant data by plot.csv")
+byPlot <- read.csv("../Data/Nocturnal only site data.csv")
 
 # Check site names match
 length(byPlot$Site) == sum(byPlot$Site %in% PDData$Site)
+length(byPlot$Site) == sum(PDData$Site %in% byPlot$Site)
 
 # Combine PD and plot data
 byPlot <- cbind(byPlot, PDData[match(byPlot$Site, PDData$Site), 
@@ -44,6 +57,10 @@ byPair <- byPlot %>%
             annRain = mean(AnnualRainfall), 
             soilDeg = mean(SoilPC1), 
             PD = PD[Landuse != "Conserved"] / PD[Landuse == "Conserved"])
+
+# Correct the infinity value for the plot pair where the conserved plot had
+# zero PD
+byPair[30, "PD"] <- NA
 
 #================
 # Linear modeling
@@ -93,8 +110,8 @@ M1 <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain +
 
 # Use AIC to select final model
 step(M1)
-Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
-           landuse:soilDeg, data = byPair)
+Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain, 
+               data = byPair)
 
 ### Model validation
 
@@ -119,44 +136,35 @@ plot(Influence$infmat[,"cook.d"])
 summary(Mfinal)
 
 # Significance testing
-nolandrain <- lm(logPD ~ landuse + annRain + soilDeg +  
-                   landuse:soilDeg, data = byPair)
-nolandsoil <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain, 
-                   data = byPair)
-norain <- lm(logPD ~ landuse + soilDeg + landuse:soilDeg, data = byPair)
+nolandrain <- lm(logPD ~ landuse + annRain + soilDeg, data = byPair)
 nosoil <- lm(logPD ~ landuse + annRain + landuse:annRain, data = byPair)
-nointer <- lm(logPD ~ landuse + annRain + soilDeg, data = byPair)
+norain <- lm(logPD ~ landuse + soilDeg, data = byPair)
 noland <- lm(logPD ~ annRain + soilDeg, data = byPair)
 # Effect of landuse/rainfall interaction
 anova(nolandrain, Mfinal)
-# Effect of landuse/soil interaction
-anova(nolandsoil, Mfinal)
 # Effect of rainfall
 anova(norain, nolandrain)
 # Effect of soil
-anova(nosoil, nolandsoil)
+anova(nosoil, Mfinal)
 # Effect of landuse
-anova(noland, nointer)
+anova(noland, nolandrain)
 
-# Model selection using LRT might work better for plants because this leads
-# to removal of landuse by rainfall interaction which is not significant (p = 0.14).
-# The removal of this interaction increases AIC by < 1.
+# Model selection using LRT might work better for small mammals because this 
+# would lead to removal of soil which is not significant (p = 0.14), BUT this
+# would also lead to removal of landuse which would not be good.
 
 #==============
 # Plotting data
 #==============
 
-Dat <- byPair %>% group_by(landuse) %>% summarise(mean = mean(PD), SE = SE(PD))
+SE <- function(x) {
+  sd(x, na.rm = T)/sqrt(length(!is.na(x)))
+}
+Dat <- byPair %>% group_by(landuse) %>% summarise(mean = mean(PD, na.rm = T), 
+                                                  SE = SE(PD))
 
 plot(Dat$landuse, Dat$mean, ylim=range(c(Dat$mean-Dat$SE, 
                                          Dat$mean+Dat$SE)),
      pch=19)
 arrows(c(1,3,4), Dat$mean-Dat$SE, c(1,3,4), 
        Dat$mean+Dat$SE, code=0)
-
-
-SE(byPlot$AnnualRainfall)
-
-byPlot$Landuse[byPlot$Landuse != "Conserved"]
-
-by
