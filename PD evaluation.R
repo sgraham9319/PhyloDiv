@@ -1,6 +1,7 @@
 
 library(ape)
 library(picante)
+library(dplyr)
 
 # Plants
 #########
@@ -13,33 +14,119 @@ rawCom <- read.csv("../Data/Plant community data.csv")
 phylo <- read.tree("../Data/PlantPhylo")
 
 # Calculate PD (Evolutionary Heritage) for each site and store in data frame
-PDData <- data.frame(rawCom$X, pd(rawCom[,-1], phylo, include.root = T))
+PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = T))
 names(PDData)[1] <- "Site"
 
+#=========================
+# Add PD data to plot data
+#=========================
 
-#===================================
-# Evaluating phylogenetic clustering
-#===================================
+# Load site data
+byPlot <- read.csv("../Data/Plant data by plot.csv")
 
-# As expected PD for each site has uncertainty associated with it, when we average
-# the observed/expected ratio across sites within a land use type we will need
-# to account for error propagation. One way to account for error propagation is
-# to simply calculate the average for each land use type using resampling and
-# using the variance among these averages as the uncertainty in the group average
+# Check site names match
+length(byPlot$Site) == sum(byPlot$Site %in% PDData$Site)
 
-# Produce phylogenetic distance matrix from phylogeny
-phyDist <- cophenetic(phylo)
+# Combine PD and plot data
+byPlot <- cbind(byPlot, PDData[match(byPlot$Site, PDData$Site), 
+                               c("PD", "SR")])
 
-# Calculate mean pariwise distance (takes some time to run)
-ses.mpd(rawCom[,-1], phyDist, null.model = "taxa.labels", runs = 99)
+#=========================
+# Format data for modeling
+#=========================
 
-# Column "mpd.obs.z" in the output is the standardized effect size of MPD - if
-# the value is positive the community is overdispersed, but if negative it is
-# clustered.
+byPair <- byPlot %>% 
+  group_by(PairID) %>% 
+  summarise(landuse = Landuse[Landuse != "Conserved"], 
+            annRain = mean(AnnualRainfall), 
+            soilDeg = mean(SoilPC1), 
+            PD = PD[Landuse != "Conserved"] / PD[Landuse == "Conserved"])
 
-# Instead of using mpd, could also use mntd (mean nearest taxon distance). 
-# MPD is generally thought to be more sensitive to tree-wide patterns of 
-# phylogenetic clustering and eveness, while MNTD is more sensitive to
-# patterns of evenness and clustering closer to the tips of the phylogeny. So
-# if community comes from many different orders, but very specific subsets of
-# the species within those orders, MPD may be zero but MNTD would be negative.
+#================
+# Linear modeling
+#================
+
+### Data exploration
+# Look at distributions of predictor variables
+hist(byPair$annRain)
+hist(byPair$soilDeg)
+
+# Predictor variables look okay. Check if the response variable has a 
+# normal distribution
+hist(byPair$PD)
+qqnorm(byPair$PD)
+qqline(byPair$PD)
+
+# Response variable a little right-skewed. Try log transformation
+byPair$logPD <- log(byPair$PD)
+hist(byPair$logPD)
+qqnorm(byPair$logPD)
+qqline(byPair$logPD)
+
+# This looks much better. Continue with log transformed EH as the response
+# variable. Now let's look for outliers in each of these variables
+dotchart(byPair$logPD, main = "PD")
+dotchart(byPair$annRain, main = "Rain")
+dotchart(byPair$soilDeg, main = "Soil")
+
+### Testing for collinearity
+source("C:/Users/stuart/Documents/Science books/Zuur et al 2009 Mixed Models/HighstatLibV6.R")
+
+Z <- cbind(byPair$logPD, byPair$annRain, byPair$soilDeg)
+colnames(Z) <- c("logPD", "Rain", "Soil")
+pairs(Z, lower.panel = panel.smooth2,
+      upper.panel = panel.cor, diag.panel = panel.hist)
+
+# Some correlation between rainfall and PC1 (-0.6). Check variance inflation 
+# factors (VIFs)
+corvif(Z)
+
+# No VIFs are greater than 3, suggesting that collinearity is not a problem 
+# (Zuur et al. 2007)
+
+### Model selection
+M1 <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
+           landuse:soilDeg, data = byPair)
+
+# Use AIC to select final model
+step(M1)
+Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
+           landuse:soilDeg, data = byPair)
+
+### Model validation
+
+# Check for linearity and equal variance across range of fitted values
+plot(fitted(Mfinal), residuals(Mfinal))
+abline(0,0)
+
+# Equal variance and linearity assumptions appear justfieid, now check assumption
+# of normality in residuals
+hist(residuals(Mfinal))
+qqnorm(residuals(Mfinal))
+qqline(residuals(Mfinal))
+
+# I think this is close enough to a normal distribution. Finally, check for
+# influential data points
+Influence <- influence.measures(Mfinal)
+plot(Influence$infmat[,"cook.d"])
+
+# No points have a Cook's distance greater than 1.
+
+#==============
+# Plotting data
+#==============
+
+Dat <- byPair %>% group_by(landuse) %>% summarise(mean = mean(PD), SE = SE(PD))
+
+plot(Dat$landuse, Dat$mean, ylim=range(c(Dat$mean-Dat$SE, 
+                                         Dat$mean+Dat$SE)),
+     pch=19)
+arrows(c(1,3,4), Dat$mean-Dat$SE, c(1,3,4), 
+       Dat$mean+Dat$SE, code=0)
+
+
+SE(byPlot$AnnualRainfall)
+
+byPlot$Landuse[byPlot$Landuse != "Conserved"]
+
+by
