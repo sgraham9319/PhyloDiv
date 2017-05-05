@@ -20,7 +20,7 @@ mammal.tree <- mammal.supertree.phylos$mammalST_bestDates
 # Load small mammal community data
 rawCom <- read.csv("../Data/Diurnal excluded com data.csv")
 
-# Prune supertree to only the sampled small taxa
+# Prune supertree to only the sampled taxa
 smammal <- as.matrix(t(rawCom))
 phylo <- treedata(mammal.tree, smammal)$phy
 
