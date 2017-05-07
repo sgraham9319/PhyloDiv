@@ -20,8 +20,9 @@ mammal.tree <- mammal.supertree.phylos$mammalST_bestDates
 # Load large mammal community data
 rawCom <- read.csv("../Data/Large mammal com data.csv")
 
-# Remove sites where no large mammals were observed
-rawCom <- rawCom[-which(apply(rawCom[,-1], MARGIN = 1, FUN = sum) == 0),]
+# Remove sites where only 1 or zero large mammal species were observed
+# (Faith's index is not defined for these communities)
+#rawCom <- rawCom[-which(apply(rawCom[,-1], MARGIN = 1, FUN = sum) < 2),]
 
 # Remove species that did not appear in any of sampled sites
 spsRm <- names(which(apply(rawCom[,-1], MARGIN = 2, FUN = sum) == 0))
@@ -36,8 +37,11 @@ phylo <- treedata(mammal.tree, lmammal)$phy
 plot(phylo, type = "fan", cex = 0.6)
 
 # Calculate PD (Evolutionary Heritage) for each site and store in data frame
-PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = T))
+PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = F))
 names(PDData)[1] <- "Site"
+
+# Replace NAs with zero
+PDData[is.na(PDData$PD),"PD"] <- 0
 
 #==================================
 # Add PD data to sampling site data
@@ -130,7 +134,7 @@ step(M1)
 
 Mfinal <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 + Landuse:AnnualRainfall + 
            Landuse:SoilPC1, data = byPlot)
-
+Mfinal <- lm(PD ~ Landuse + AnnualRainfall + Landuse:AnnualRainfall, data = byPlot)
 ### Model validation
 
 # Check for linearity and equal variance across range of fitted values
@@ -176,3 +180,19 @@ anova(nosoil, nolandsoil)
 # Effect of landuse
 anova(noland, nointer)
 
+table(byPlot$Landuse)
+
+#==============
+# Plotting data
+#==============
+SE <- function(x) {
+  sd(x, na.rm = T)/sqrt(length(!is.na(x)))
+}
+
+Dat <- byPlot %>% group_by(Landuse) %>% summarise(mean = mean(PD), SE = SE(PD))
+
+plot(Dat$Landuse, Dat$mean, ylim=range(c(Dat$mean-Dat$SE, 
+                                         Dat$mean+Dat$SE)),
+     pch=19)
+arrows(c(1,2,3), Dat$mean-Dat$SE, c(1,2,3), 
+       Dat$mean+Dat$SE, code=0)

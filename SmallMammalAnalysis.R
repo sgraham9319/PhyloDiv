@@ -29,8 +29,11 @@ phylo <- treedata(mammal.tree, smammal)$phy
 plot(phylo, cex = 0.6)
 
 # Calculate PD (Evolutionary Heritage) for each site and store in data frame
-PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = T))
+PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = F))
 names(PDData)[1] <- "Site"
+
+# Replace NAs with zero
+PDData[is.na(PDData$PD), "PD"] <- 0
 
 #======================================
 # Add PD data to experimental plot data
@@ -58,10 +61,12 @@ byPair <- byPlot %>%
             soilDeg = mean(SoilPC1), 
             PD = PD[Landuse != "Conserved"] / PD[Landuse == "Conserved"])
 
-# Correct the infinity value for the plot pair where the conserved plot had
-# zero PD
-byPair[30, "PD"] <- NA
+# Remove NaNs and Infinite values
+byPair[is.nan(byPair$PD), "PD"] <- NA
+byPair[is.infinite(byPair$PD), "PD"] <- NA
 
+# Try removing outlier
+# byPair <- byPair[byPair$PairID != 34,]
 #================
 # Linear modeling
 #================
@@ -110,9 +115,9 @@ M1 <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain +
 
 # Use AIC to select final model
 step(M1)
-Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain, 
-               data = byPair)
-
+Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
+               landuse:soilDeg, data = byPair)
+Mfinal <- lm(logPD ~ annRain, data = byPair)
 ### Model validation
 
 # Check for linearity and equal variance across range of fitted values
@@ -136,18 +141,24 @@ plot(Influence$infmat[,"cook.d"])
 summary(Mfinal)
 
 # Significance testing
-nolandrain <- lm(logPD ~ landuse + annRain + soilDeg, data = byPair)
+nolandrain <- lm(logPD ~ landuse + annRain + soilDeg +  
+                   landuse:soilDeg, data = byPair)
+nolandsoil <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain, 
+                 data = byPair)
+norain <- lm(logPD ~ landuse + soilDeg + landuse:soilDeg, data = byPair)
 nosoil <- lm(logPD ~ landuse + annRain + landuse:annRain, data = byPair)
-norain <- lm(logPD ~ landuse + soilDeg, data = byPair)
+nointer <- lm(logPD ~ landuse + annRain + soilDeg, data = byPair)
 noland <- lm(logPD ~ annRain + soilDeg, data = byPair)
 # Effect of landuse/rainfall interaction
 anova(nolandrain, Mfinal)
+# Effect of landuse/soil interaction
+anova(nolandsoil, Mfinal)
 # Effect of rainfall
 anova(norain, nolandrain)
 # Effect of soil
-anova(nosoil, Mfinal)
+anova(nosoil, nolandsoil)
 # Effect of landuse
-anova(noland, nolandrain)
+anova(noland, nointer)
 
 # Model selection using LRT might work better for small mammals because this 
 # would lead to removal of soil which is not significant (p = 0.14), BUT this

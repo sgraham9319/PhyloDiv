@@ -17,7 +17,7 @@ rawCom <- read.csv("../Data/Plant community data.csv")
 phylo <- read.tree("../Data/PlantPhylo")
 
 # Calculate PD (Evolutionary Heritage) for each site and store in data frame
-PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = T))
+PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = F))
 names(PDData)[1] <- "Site"
 
 #======================================
@@ -145,6 +145,9 @@ anova(noland, nointer)
 #==============
 # Plotting data
 #==============
+SE <- function(x) {
+  sd(x, na.rm = T)/sqrt(length(!is.na(x)))
+}
 
 Dat <- byPair %>% group_by(landuse) %>% summarise(mean = mean(PD), SE = SE(PD))
 
@@ -155,8 +158,3 @@ arrows(c(1,3,4), Dat$mean-Dat$SE, c(1,3,4),
        Dat$mean+Dat$SE, code=0)
 
 
-SE(byPlot$AnnualRainfall)
-
-byPlot$Landuse[byPlot$Landuse != "Conserved"]
-
-by
