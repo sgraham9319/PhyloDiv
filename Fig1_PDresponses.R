@@ -1,4 +1,7 @@
-
+library(ape)
+library(picante)
+library(dplyr)
+library(geiger)
 
 #======================
 # Formatting plant data
@@ -145,8 +148,8 @@ allData$treat <- factor(allData$treat, levels = c("plantAgriculture",
 
 # Create the plot
 boxplot(PD ~ treat, at = c(1,2,4,5,6,8,9,10), ylim = c(0,2.1), outline = F, 
-        col = c("red", "blue", "red", "blue", "gold1", "red", "blue", "gold1"),
-        xaxt = "n", yaxt = "n",ylab = "PD response", 
+        col = c("green1", "violetred3", "green1", "violetred3", "blue", "green1", "violetred3", "blue"),
+        xaxt = "n", yaxt = "n", ylab = "PD Change", 
         xlab = "Type of land use change", whisklty = "solid", 
         data = allData)
 axis(side = 1, at = c(1,2,4,5,6,8,9,10), labels = c("P", "S", "P", "S", "L", "P", "S", "L"), cex.axis = 0.8,

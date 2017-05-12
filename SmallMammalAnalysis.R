@@ -160,6 +160,9 @@ anova(nosoil, nolandsoil)
 # Effect of landuse
 anova(noland, nointer)
 
+#noind <- lm(logPD ~ 0, data = byPair)
+#anova(noind, Mfinal)
+
 # Model selection using LRT might work better for small mammals because this 
 # would lead to removal of soil which is not significant (p = 0.14), BUT this
 # would also lead to removal of landuse which would not be good.

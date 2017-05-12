@@ -22,7 +22,7 @@ rawCom <- read.csv("../Data/Large mammal com data.csv")
 
 # Remove sites where only 1 or zero large mammal species were observed
 # (Faith's index is not defined for these communities)
-#rawCom <- rawCom[-which(apply(rawCom[,-1], MARGIN = 1, FUN = sum) < 2),]
+rawCom <- rawCom[-which(apply(rawCom[,-1], MARGIN = 1, FUN = sum) < 2),]
 
 # Remove species that did not appear in any of sampled sites
 spsRm <- names(which(apply(rawCom[,-1], MARGIN = 2, FUN = sum) == 0))
@@ -179,6 +179,17 @@ anova(norain, nolandrain)
 anova(nosoil, nolandsoil)
 # Effect of landuse
 anova(noland, nointer)
+
+# SR < 2 excluded
+nolandrain <- lm(PD ~ Landuse + AnnualRainfall, data = byPlot)
+norain <- lm(PD ~ Landuse, data = byPlot)
+noland <- lm(PD ~ AnnualRainfall, data = byPlot)
+# Effect of landuse/rain interaction
+anova(nolandrain, Mfinal)
+# Effect of rain
+anova(norain, nolandrain)
+# Effect of land use
+anova(noland, nolandrain)
 
 table(byPlot$Landuse)
 
