@@ -1,4 +1,15 @@
-.Rproj.user
+# History files
 .Rhistory
+
+# Session Data files
 .RData
-.Ruserdata
+
+# RStudio files
+.Rproj.user
+
+# csv files
+Data/*.csv
+
+# Phylogenies
+Data/*nexus.txt
+Data/plant_phylo
