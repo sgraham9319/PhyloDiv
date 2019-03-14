@@ -20,96 +20,110 @@ library(ape)
 library(picante)
 library(geiger)
 library(ncf)
+library(nlme)
+
+# Load functions file
+source("R/utils.R")
 
 #===============================
 # 1. Formating data for analysis
 #===============================
 
 # Load community data
-rawCom <- read.csv("../Data/Lg_mammal_com_dom_incl.csv")
-
-# Remove species that did not appear in any of sampled sites
-spsRm <- names(which(apply(rawCom[,-1], MARGIN = 2, FUN = sum) == 0))
-rawCom <- rawCom[,-which(names(rawCom) == spsRm)]
+raw_site <- read.csv("Data/large_mammal.csv")
 
 # Load mammal supertree
-mammal.supertree.phylos <- read.nexus("../Data/Mammal.supertree.nexus.txt")
+supertree <- read.nexus("Data/Mammal.supertree.nexus.txt")
 
-# Select the "bestDates" tree
-mammal.tree <- mammal.supertree.phylos$mammalST_bestDates
+# Create tree of sampled large mammal taxa
+large_mammal_tree <- subset_supertree(raw_site, supertree, 2:57)
 
-# Prune supertree to only the sampled taxa
-lmammal <- as.matrix(t(rawCom))
-phylo <- treedata(mammal.tree, lmammal)$phy # Warning = not all taxa in supertree
-                                            # were found in community data
+# Add columns for phylogenetic diversity and species richness - warning message
+# is saying that PD could not be calculated for communities containing a
+# single species
+large_mammal <- faith_pd(raw_site, large_mammal_tree, 2:57)
 
-# Calculate PD for each site and store in data frame - warning messages are saying
-# that PD could not be calculated for communities containing a single species
-PDData <- data.frame(rawCom$Site, pd(rawCom[,-1], phylo, include.root = F))
-names(PDData)[1] <- "Site"
+#===============
+# 2. Modeling PD
+#===============
 
-# Calculate PD of a community containing all taxa in regional phylogeny
-allTaxaCom <- rawCom[1, -1]
-allTaxaCom[1,] <- 1
-pd(allTaxaCom, phylo, include.root = F)
+#-----------------
+# Data exploration
+#-----------------
 
-# Manually enter zeroes in the PD column for communities that contained < 2 taxa
-PDData$PD[which(PDData$SR < 2)] <- 0
+# Check distributions of predictor variables
+hist(large_mammal$annual_rainfall)
+hist(large_mammal$soil_pc1)
 
-# Load environmental data
-env <- read.csv("../Data/Large mammal data.csv")
+# Check if the untransformed response variable has a normal distribution
+hist(large_mammal$PD)
+qqnorm(large_mammal$PD)
+qqline(large_mammal$PD)
 
-# Check site names match
-length(PDData$Site) == sum(PDData$Site %in% env$Site)
+# Look for outliers in each of these variables
+dotchart(large_mammal$PD, main = "PD")
+dotchart(large_mammal$annual_rainfall, main = "Rain")
+dotchart(large_mammal$soil_pc1, main = "Soil")
 
-# Combine PD and environment data
-byPlot <- cbind(env, PDData[match(env$Site, PDData$Site), 
-                               c("PD", "SR")])
+#-------------------------
+# Testing for collinearity
+#-------------------------
 
-#======================================================
-# 2. Do distinct organismal groups respond differently?
-#======================================================
+# Source code from Zuur et al 2009
+source("R/HighstatLibV6.R")
 
-# Create subsets
-Con <- byPlot[byPlot$Landuse == "Conserved" & byPlot$SR >= 2,]
-Past <- byPlot[byPlot$Landuse == "Pastoral" & byPlot$SR >= 2,]
-Exc <- byPlot[byPlot$Landuse == "Fenced" & byPlot$SR >= 2,]
+# Create matrix of variables
+Z <- cbind(large_mammal$PD, large_mammal$annual_rainfall, 
+           large_mammal$soil_pc1)
+colnames(Z) <- c("PD", "Rain", "Soil")
 
-# Obtain random sample of 1000 sites from each land-use type
-resampCon <- Con[sample(x = 1:nrow(Con), size = 1000, replace = T),]
-resampPast <- Past[sample(x = 1:nrow(Past), size = 1000, replace = T),]
-resampExc <- Exc[sample(x = 1:nrow(Exc), size = 1000, replace = T),]
+# Check for correlation among variables
+pairs(Z, lower.panel = panel.smooth2,
+      upper.panel = panel.cor, diag.panel = panel.hist)
 
-# Calculate PD response variables for each type of land use change
-PDPast <- resampPast$PD / resampCon$PD
-PDExc <- resampExc$PD / resampCon$PD
+# Some correlation between rainfall and soil degradation (-0.5). Check variance 
+# inflation factors (VIFs)
+corvif(Z)
 
-# Calculate log PD responses
-logPDPast <- log(PDPast)
-logPDExc <- log(PDExc)
+# No VIFs are greater than 3, suggesting that collinearity is not a problem 
+# (Zuur et al. 2007)
 
-# Combine in data frame
-PD <- c(PDPast, PDExc)
-logPD <- c(logPDPast, logPDExc)
-landuse <- rep(c("Pastoral", "Exclosure"), each = 1000)
-PairID <- rep(NA, times = 2000)
-lMamm <- data.frame(PairID, landuse, PD, logPD)
+#-----------------------------------------
+# Selecting model random effects structure
+#-----------------------------------------
 
-# Write PD response data to csv for plotting figure 1
-write.csv(lMamm, file = "../Data/Plot data/Large_mammal_PD_response.csv",
-          row.names = F)
+# This model selection protocol is adapted from the top-down strategy described
+# in Zuur et al (2009) pp 121-122. First create models with the same fixed 
+# effects structure (most complex structure possible) but with different
+# random effects structure and compare them using AIC (not all are nested)
 
-#====================================
-# 3. Are responses context-dependent?
-#====================================
+# Create object to be passed to lme to increase number of iterations and 
+# achieve convergence (only use for models that fail to converge without this
+# additional measure)
+lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
-#-------------------------------------------
-# Checking for spatial autocorrelation (SAC)
-#-------------------------------------------
+# Create models
+M1 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, method = "REML", data = large_mammal)
+M2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 | ranch, method = "REML", data = large_mammal)
+M3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 + soil_pc1 | ranch,
+            control = lmc, method = "REML", data = large_mammal)
+M4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 + annual_rainfall | ranch, 
+            method = "REML", data = large_mammal)
+
+# Determine which random effects structure is best according to AIC
+AIC(M1, M2, M3, M4) # M2 (random intercepts) is best
+
+#----------------------------------
+# Check for spatial autocorrelation
+#----------------------------------
 
 # Plot spatial correlogram of phylogenetic diversity measurements
-fit1 <- correlog(x = byPlot$Longitude, y = byPlot$Latitude, 
-                 z = byPlot$PD, increment = 1, resamp = 500,
+fit1 <- correlog(x = large_mammal$longitude, y = large_mammal$latitude, 
+                 z = large_mammal$PD, increment = 1, resamp = 500,
                  latlon = TRUE)
 plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance class", ylab = "Moran's I",
      main = "SAC in PD data")
@@ -119,124 +133,44 @@ plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance class", ylab = "Mora
 # just under 0.5.
 
 # Now create full model and check residuals for SAC
-M1 <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 + Landuse:AnnualRainfall + 
-           Landuse:SoilPC1, data = byPlot)
-fit2 <- correlog(x = byPlot$Longitude, y = byPlot$Latitude, z = residuals(M1),
-                 increment = 1, resamp = 500, latlon = TRUE)
+M_full <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+                landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fit2 <- correlog(x = large_mammal$longitude, y = large_mammal$latitude,
+                 z = residuals(M_full), increment = 1, resamp = 500, latlon = TRUE)
 plot(fit2$mean.of.class, fit2$correlation, xlab = "Distance class", 
      ylab = "Moran's I", main = "SAC in full model residuals")
 
 # SAC appears to be accounted for by model covariates
 
-#-----------------
-# Data exploration
-#-----------------
+#----------------------------------------
+# Selecting model fixed effects structure
+#----------------------------------------
 
-# Look at distributions of predictor variables
-hist(byPlot$AnnualRainfall)
-hist(byPlot$SoilPC1)
+# Refit full model with ML then select optimal fixed effects structure
+M5 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
 
-# Check if the response variable has a normal distribution
-hist(byPlot$PD)
-qqnorm(byPlot$PD)
-qqline(byPlot$PD)
+# Does inclusion of landuse:soil_pc1 improve model?
+M6 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+            random = ~ 1 | ranch, method = "ML", data = large_mammal)
+anova(M6, M5) # Not convinced, new model is M6
 
-# Look for any outliers
-dotchart(byPlot$PD, main = "PD")
-dotchart(byPlot$AnnualRainfall, main = "Rain")
-dotchart(byPlot$SoilPC1, main = "Soil")
+# Does inclusion of landuse:annual_rainfall improve model?
+M7 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, 
+          random = ~ 1 | ranch, method = "ML", data = large_mammal)
+anova(M7, M6) # Yes, model is still M6
 
-#-------------------------
-# Testing for collinearity
-#-------------------------
+# Does inclusion of soil_pc1 improve model?
+M8 <- lme(PD ~ landuse + annual_rainfall, 
+          random = ~ 1 | ranch, method = "ML", data = large_mammal)
+anova(M8, M6) # Yes, final model is M6
 
-# Source code from Zuur et al 2009
-source("HighstatLibV6.R")
+# Refit final model with REML
+MF <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+          random = ~ 1 | ranch, method = "ML", data = large_mammal)
 
-# Create matrix of variables
-Z <- cbind(byPlot$PD, byPlot$AnnualRainfall, byPlot$SoilPC1)
-colnames(Z) <- c("PD", "Rain", "Soil")
 
-# Check for correlation among variables
-pairs(Z, lower.panel = panel.smooth2,
-      upper.panel = panel.cor, diag.panel = panel.hist)
 
-# Some correlation between rainfall and PC1 (-0.5). Check variance inflation 
-# factors (VIFs)
-corvif(Z)
-
-# No VIFs are greater than 3, suggesting that collinearity is not a problem 
-# (Zuur et al. 2007)
-
-#----------------
-# Model selection
-#----------------
-
-# Create full model
-M1 <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 + Landuse:AnnualRainfall + 
-           Landuse:SoilPC1, data = byPlot)
-
-# Use AIC to select final model
-step(M1)
-
-# Create final model (same as full model)
-Mfinal <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 + Landuse:AnnualRainfall + 
-           Landuse:SoilPC1, data = byPlot)
-
-#-----------------
-# Model validation
-#-----------------
-
-# Check for linearity and equal variance across range of fitted values
-plot(fitted(Mfinal), residuals(Mfinal))
-abline(0,0)
-
-# Equal variance assumption may not be justified, now check assumption
-# of normality in residuals
-hist(residuals(Mfinal))
-qqnorm(residuals(Mfinal))
-qqline(residuals(Mfinal))
-
-# I think this is close enough to a normal distribution. Finally, check for
-# influential data points
-Influence <- influence.measures(Mfinal)
-Cooks.distances <- Influence$infmat[,"cook.d"]
-plot(Cooks.distances)
-
-# No points have a Cook's distance greater than 1.
-
-#---------------------
-# Model interpretation
-#---------------------
-
-# Check model summary
-summary(Mfinal)
-
-# Create reduced models for significance testing
-nolandsoil <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 + Landuse:AnnualRainfall, 
-                   data = byPlot)
-nolandrain <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1 +
-                   Landuse:SoilPC1, data = byPlot)
-nointer <- lm(PD ~ Landuse + AnnualRainfall + SoilPC1, data = byPlot)
-nosoil <- lm(PD ~ Landuse + AnnualRainfall + Landuse:AnnualRainfall, 
-             data = byPlot)
-norain <- lm(PD ~ Landuse + SoilPC1 + Landuse:SoilPC1, data = byPlot)
-noland <- lm(PD ~ AnnualRainfall + SoilPC1, data = byPlot)
-
-# Effect of landuse/rainfall interaction
-anova(nolandrain, Mfinal)
-
-# Effect of landuse/soil interaction
-anova(nolandsoil, Mfinal)
-
-# Effect of rainfall
-anova(norain, nolandrain)
-
-# Effect of soil
-anova(nosoil, nolandsoil)
-
-# Effect of landuse
-anova(noland, nointer)
 
 #-------------------
 # Creating figure 3c

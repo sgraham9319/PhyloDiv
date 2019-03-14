@@ -20,180 +20,148 @@
 library(ape)
 library(picante)
 library(dplyr)
+library(nlme)
+
+# Load functions file
+source("R/utils.R")
 
 #===============================
 # 1. Formating data for analysis
 #===============================
 
-# Load community data
-rawCom <- read.csv("../Data/PlantRawCom.csv")
-
-# Convert to presence/absence community composition matrix
-pres.abs <- rawCom[, - c(2, 3)]
-for(i in 2:ncol(pres.abs)){
-  pres.abs[,i][which(pres.abs[, i] > 0)] <- 1
-}
+# Load site data
+raw_site <- read.csv("Data/plant.csv")
 
 # Load phylogeny
-phylo <- read.tree("../Data/PlantPhylo")
+phylo <- read.tree("Data/PlantPhylo")
 
-# Calculate PD for each site and store in data frame
-PDData <- data.frame(pres.abs$Site, pd(pres.abs[,-1], phylo, include.root = F))
-names(PDData)[1] <- "Site"
+# Add columns for phylogenetic diversity and species richness
+plant <- faith_pd(raw_site, phylo, 4:151)
 
-# Calculate PD of a community containing all taxa in regional phylogeny
-allTaxaCom <- pres.abs[1, -1]
-allTaxaCom[1,] <- 1
-pd(allTaxaCom, phylo, include.root = F)
+# Reorder factor levels for landuse so that conserved forms intercept in models
+levels(plant$landuse) <- levels(plant$landuse)[c(2, 1, 3, 4)]
 
-# Load pair ID and environmental data
-env <- read.csv("../Data/Plant data by plot.csv")
-
-# Check site names match between PD and environmental data
-length(env$Site) == sum(env$Site %in% PDData$Site)
-
-# Combine PD and environmental data
-byPlot <- cbind(env, PDData[match(env$Site, PDData$Site), 
-                               c("PD", "SR")])
-
-#======================================================
-# 2. Do distinct organismal groups respond differently?
-#======================================================
-
-# Calculate PD responses
-byPair <- byPlot %>% 
-  group_by(PairID) %>% 
-  summarise(landuse = droplevels(Landuse[Landuse != "Conserved"]), 
-            annRain = mean(AnnualRainfall), 
-            soilDeg = mean(SoilPC1), 
-            PDrawChg = PD[Landuse != "Conserved"] - PD[Landuse == "Conserved"],
-            logPD = log(PD[Landuse != "Conserved"] / PD[Landuse == "Conserved"]),
-            PD = PD[Landuse != "Conserved"] / PD[Landuse == "Conserved"],
-            SRrawChg = SR[Landuse != "Conserved"] - SR[Landuse == "Conserved"],
-            SR = SR[Landuse != "Conserved"] / SR[Landuse == "Conserved"])
-
-# Write PD response data to csv for plotting figures 1 and 2
-write.csv(byPair[, c("PairID", "landuse", "PD", "logPD")],
-          file = "../Data/Plot data/Plant_PD_response.csv", row.names = F)
-
-#====================================
-# 3. Are responses context-dependent?
-#====================================
+#===============
+# 2. Modeling PD
+#===============
 
 #-----------------
 # Data exploration
 #-----------------
 
+# Check distribution of dependent variable
+hist(plant$PD)
+qqnorm(plant$PD)
+qqline(plant$PD)
+
 # Check distributions of predictor variables
-hist(byPair$annRain)
-hist(byPair$soilDeg)
+hist(plant$annual_rainfall)
+hist(plant$soil_pc1)
 
-# Check if the untransformed response variable has a normal distribution
-hist(byPair$PD)
-qqnorm(byPair$PD)
-qqline(byPair$PD)
-
-# Response variable a little right-skewed. Used log transformed values
-hist(byPair$logPD)
-qqnorm(byPair$logPD)
-qqline(byPair$logPD)
-
-# This looks much better. Continue with log transformed PD as the response
-# variable. Now look for outliers in each of these variables
-dotchart(byPair$logPD, main = "PD")
-dotchart(byPair$annRain, main = "Rain")
-dotchart(byPair$soilDeg, main = "Soil")
+# Check for outliers
+dotchart(plant$PD, main = "PD")
+dotchart(plant$annual_rainfall, main = "Rain")
+dotchart(plant$soil_pc1, main = "Soil")
 
 #-------------------------
 # Testing for collinearity
 #-------------------------
 
 # Source code from Zuur et al 2009
-source("HighstatLibV6.R")
+source("R/HighstatLibV6.R")
 
 # Create matrix of variables
-Z <- cbind(byPair$logPD, byPair$annRain, byPair$soilDeg)
-colnames(Z) <- c("logPD", "Rain", "Soil")
+Z <- cbind(plant$PD, plant$annual_rainfall, plant$soil_pc1)
+colnames(Z) <- c("PD", "Rain", "Soil")
 
 # Check for correlation among variables
 pairs(Z, lower.panel = panel.smooth2,
       upper.panel = panel.cor, diag.panel = panel.hist)
 
-# Some correlation between rainfall and soil degradation (-0.6). Check variance 
+# Some correlation between rainfall and soil degradation (-0.5). Check variance 
 # inflation factors (VIFs)
 corvif(Z)
 
 # No VIFs are greater than 3, suggesting that collinearity is not a problem 
-# (Zuur et al. 2007)
+# (Zuur et al. 2009)
 
-#----------------
-# Model selection
-#----------------
+#-----------------------------------------
+# Selecting model random effects structure
+#-----------------------------------------
 
-# Create full model
-M1 <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
-           landuse:soilDeg, data = byPair)
+# This model selection protocol is adapted from the top-down strategy described
+# in Zuur et al (2009) pp 121-122. First create models with the same fixed 
+# effects structure (most complex structure possible) but with different
+# random effects structure and compare them using AIC (not all are nested)
 
-# Use AIC to select final model
-step(M1)
+# Create object to be passed to lme to increase number of iterations and 
+# achieve convergence (only use for models that fail to converge without this
+# additional measure)
+lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
-# Create final model according to AIC (same as full model)
-Mfinal <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain + 
-           landuse:soilDeg, data = byPair)
+# Create models
+M1 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, method = "REML", data = plant)
+M2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = plant)
+M3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = plant)
+M4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
+            control = lmc, method = "REML", data = plant)
+
+# Determine which random effects structure is best according to AIC
+AIC(M1, M2, M3, M4) # M2 (random intercepts) is best
+
+# Refit full model with ML then select optimal fixed effects structure
+M5 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+            landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+
+# Does inclusion of landuse:soil_pc1 improve model?
+M6 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+          random = ~ 1 | pair_id, method = "ML", data = plant)
+anova(M6, M5) # No, new model is M6
+
+# Does inclusion of landuse:annual_rainfall improve model?
+M7 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, 
+          random = ~ 1 | pair_id, method = "ML", data = plant)
+anova(M7, M6) # No, new model is M7
+
+# Does inclusion of soil_pc1 improve model?
+M8 <- lme(PD ~ landuse + annual_rainfall, 
+          random = ~ 1 | pair_id, method = "ML", data = plant)
+anova(M8, M7) # No, new model is M8
+
+# Does inclusion of annual_rainfall improve model?
+M9 <- lme(PD ~ landuse, 
+          random = ~ 1 | pair_id, method = "ML", data = plant)
+anova(M9, M8) # No, new model is M9
+
+# Does inclusion of landuse improve model?
+M10 <- lme(PD ~ 1, 
+           random = ~ 1 | pair_id, method = "ML", data = plant)
+anova(M10, M9) # Yes, final model is M9
+
+# Refit final model with REML
+MF <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "REML", data = plant)
 
 #-----------------
 # Model validation
 #-----------------
 
 # Check for linearity and equal variance across range of fitted values
-plot(fitted(Mfinal), residuals(Mfinal))
+plot(fitted(MF), residuals(MF))
 abline(0,0)
 
-# Equal variance and linearity assumptions appear justfied. Check assumption
-# of normality in residuals
-hist(residuals(Mfinal))
-qqnorm(residuals(Mfinal))
-qqline(residuals(Mfinal))
+# Check assumption of normality in residuals
+hist(residuals(MF))
+qqnorm(residuals(MF))
+qqline(residuals(MF))
 
-# This looks close enough to a normal distribution. Finally, check for
-# influential data points
-Influence <- influence.measures(Mfinal)
-plot(Influence$infmat[,"cook.d"])
+# Check for relationships between residuals and explanatory variables
+plot(plant$landuse, residuals(MF))
 
-# No points have a Cook's distance greater than 1, suggesting influential
-# data points are not a problem
 
-#---------------------
-# Model interpretation
-#---------------------
-
-# Check model summary
-summary(Mfinal)
-
-# Create reduced models for significance testing
-nolandrain <- lm(logPD ~ landuse + annRain + soilDeg +  
-                   landuse:soilDeg, data = byPair)
-nolandsoil <- lm(logPD ~ landuse + annRain + soilDeg + landuse:annRain, 
-                   data = byPair)
-norain <- lm(logPD ~ landuse + soilDeg + landuse:soilDeg, data = byPair)
-nosoil <- lm(logPD ~ landuse + annRain + landuse:annRain, data = byPair)
-nointer <- lm(logPD ~ landuse + annRain + soilDeg, data = byPair)
-noland <- lm(logPD ~ annRain + soilDeg, data = byPair)
-
-# Effect of landuse/rainfall interaction
-anova(nolandrain, Mfinal)
-
-# Effect of landuse/soil interaction
-anova(nolandsoil, Mfinal)
-
-# Effect of rainfall
-anova(norain, nolandrain)
-
-# Effect of soil
-anova(nosoil, nolandsoil)
-
-# Effect of landuse
-anova(noland, nointer)
 
 #-------------------
 # Creating figure 3a
@@ -339,7 +307,7 @@ colnames(dat)[1] <- "PairID"
 for(i in unique(byPair$PairID)){
   com <- dat[dat$PairID == i, 3:ncol(dat)]
   results[results$PairID == i,3:5] <- beta.pd.decompo(com = com, tree = phylo, 
-                                    type = "Unifrac")$betadiv
+                                                      type = "Unifrac")$betadiv
 }
 
 # Summarize results by type of land use change
