@@ -26,3 +26,13 @@ subset_supertree <- function(comm, supertree, abundance_cols){
   phylo
 }
 
+#========================
+# Make transparent colors
+#========================
+
+makeTransparent<-function(someColor, alpha=100)
+{
+  newColor<-col2rgb(someColor)
+  apply(newColor, 2, function(curcoldata){rgb(red=curcoldata[1], green=curcoldata[2],
+                                              blue=curcoldata[3],alpha=alpha, maxColorValue=255)})
+}

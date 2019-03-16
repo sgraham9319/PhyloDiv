@@ -176,6 +176,69 @@ plot(small_mammal$annual_rainfall, residuals(final))
 # Extract coefficients from final model
 summary(final)
 
+#-----------------------------------
+# Creating new PD vs. rainfall graph
+#-----------------------------------
+
+# Make plot
+plot(x = small_mammal$annual_rainfall, y = small_mammal$PD, type = "n",
+     ylab = "PD", xlab = "Annual rainfall (mm)",
+     ylim = c(0, 500), yaxt = "n",
+     xlim = c(420, 750), xaxt = "n", xaxs = "i",
+     main = "Conserved = blue, Ag = red, \nFence = yellow, Pastoral = orange")
+axis(side = 2, at = seq(0,500,100), labels = seq(0,500,100), las = 1,
+     cex.axis = 0.8)
+axis(side = 1, at = seq(450,750,50), labels = seq(450,750,50),
+     cex.axis = 0.8)
+
+# Create land-use type subsets so that separate rainfall models can be made
+CN <- small_mammal[small_mammal$landuse == "Conserved",]
+AG <- small_mammal[small_mammal$landuse == "Agriculture",]
+EX <- small_mammal[small_mammal$landuse == "Fenced",]
+PA <- small_mammal[small_mammal$landuse == "Pastoral",]
+CNmod <- lm(PD ~ annual_rainfall, data = CN)
+AGmod <- lm(PD ~ annual_rainfall, data = AG)
+EXmod <- lm(PD ~ annual_rainfall, data = EX)
+PAmod <- lm(PD ~ annual_rainfall, data = PA)
+
+# Calculate confidence intervals
+CNrain <- seq(min(CN$annual_rainfall), max(CN$annual_rainfall), length.out = 50)
+CNconf <- predict(CNmod, newdata = data.frame(annual_rainfall = CNrain), interval = "confidence")
+AGrain <- seq(min(AG$annual_rainfall), max(AG$annual_rainfall), length.out = 50)
+AGconf <- predict(AGmod, newdata = data.frame(annual_rainfall = CNrain), interval = "confidence")
+EXrain <- seq(min(EX$annual_rainfall), max(EX$annual_rainfall), length.out = 50)
+EXconf <- predict(EXmod, newdata = data.frame(annual_rainfall = EXrain), interval = "confidence")
+PArain <- seq(min(PA$annual_rainfall), max(PA$annual_rainfall), length.out = 50)
+PAconf <- predict(PAmod, newdata = data.frame(annual_rainfall = PArain), interval = "confidence")
+
+# Add confidence intervals to plot
+polygon(c(rev(CNrain), CNrain), c(rev(CNconf[,3]), CNconf[,2]),
+        col = makeTransparent("paleturquoise3", alpha = 70), border = NA)
+polygon(c(rev(AGrain), AGrain), c(rev(AGconf[,3]), AGconf[,2]),
+        col = makeTransparent("red", alpha = 70), border = NA)
+polygon(c(rev(EXrain), EXrain), c(rev(EXconf[,3]), EXconf[,2]),
+        col = makeTransparent("yellow2"), border = NA)
+polygon(c(rev(PArain), PArain), c(rev(PAconf[,3]), PAconf[,2]),
+        col = makeTransparent("tan2"), border = NA)
+
+# Add lines to delimit confidence intervals
+lines(CNrain, CNconf[,1], col = "skyblue2", lwd = 2)
+lines(CNrain, CNconf[,2], lty=2, col = "skyblue2", lwd = 2)
+lines(CNrain, CNconf[,3], lty=2, col = "skyblue2", lwd = 2)
+
+lines(AGrain, AGconf[,1], col = "red", lwd = 2)
+lines(AGrain, AGconf[,2], lty=2, col = "red", lwd = 2)
+lines(AGrain, AGconf[,3], lty=2, col = "red", lwd = 2)
+
+lines(EXrain, EXconf[,1], col = "gold1", lwd = 2)
+lines(EXrain, EXconf[,2], lty=2, col = "gold1", lwd = 2)
+lines(EXrain, EXconf[,3], lty=2, col = "gold1", lwd = 2)
+
+lines(PArain, PAconf[,1], col = "tan2", lwd = 2)
+lines(PArain, PAconf[,2], lty=2, col = "tan2", lwd = 2)
+lines(PArain, PAconf[,3], lty=2, col = "tan2", lwd = 2)
+
+
 
 #-------------------
 # Creating figure 3b
@@ -219,8 +282,8 @@ ES.dat <- cbind(PDData,
                 MNTD.ES[,c("mntd.obs.p", "mntd.obs.z")])
 
 # Add landuse type data
-ESDat <- cbind(byPlot[, c("Site", "Landuse", "PairID")], 
-               ES.dat[match(byPlot$Site, ES.dat$Site), -1])
+ESDat <- cbind(small_mammal[, c("Site", "Landuse", "PairID")], 
+               ES.dat[match(small_mammal$Site, ES.dat$Site), -1])
 
 # Remove pairs not included in analysis
 ESDat <- ESDat[ESDat$PairID %in% byPair$PairID,]
