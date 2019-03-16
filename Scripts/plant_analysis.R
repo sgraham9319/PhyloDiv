@@ -21,6 +21,7 @@ library(ape)
 library(picante)
 library(dplyr)
 library(nlme)
+library(MuMIn)
 
 # Load functions file
 source("R/utils.R")
@@ -71,16 +72,16 @@ dotchart(plant$soil_pc1, main = "Soil")
 source("R/HighstatLibV6.R")
 
 # Create matrix of variables
-Z <- cbind(plant$PD, plant$annual_rainfall, plant$soil_pc1)
-colnames(Z) <- c("PD", "Rain", "Soil")
+var_mat <- cbind(plant$PD, plant$annual_rainfall, plant$soil_pc1)
+colnames(var_mat) <- c("PD", "Rain", "Soil")
 
 # Check for correlation among variables
-pairs(Z, lower.panel = panel.smooth2,
+pairs(var_mat, lower.panel = panel.smooth2,
       upper.panel = panel.cor, diag.panel = panel.hist)
 
 # Some correlation between rainfall and soil degradation (-0.5). Check variance 
 # inflation factors (VIFs)
-corvif(Z)
+corvif(var_mat)
 
 # No VIFs are greater than 3, suggesting that collinearity is not a problem 
 # (Zuur et al. 2009)
@@ -100,68 +101,74 @@ corvif(Z)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-M1 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, method = "REML", data = plant)
-M2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = plant)
-M3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = plant)
-M4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
             control = lmc, method = "REML", data = plant)
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = plant)
 
 # Determine which random effects structure is best according to AIC
-AIC(M1, M2, M3, M4) # M2 (random intercepts) is best
+AICc(rand1, rand2, rand3) # M1 (random intercepts) is best
 
-# Refit full model with ML then select optimal fixed effects structure
-M5 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+#----------------------------------------
+# Selecting model fixed effects structure
+#----------------------------------------
+
+# Create models off all combinations of fixed effects
+fix1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
-
-# Does inclusion of landuse:soil_pc1 improve model?
-M6 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+fix2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
           random = ~ 1 | pair_id, method = "ML", data = plant)
-anova(M6, M5) # No, new model is M6
-
-# Does inclusion of landuse:annual_rainfall improve model?
-M7 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, 
+fix3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + 
+            landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix5 <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
           random = ~ 1 | pair_id, method = "ML", data = plant)
-anova(M7, M6) # No, new model is M7
-
-# Does inclusion of soil_pc1 improve model?
-M8 <- lme(PD ~ landuse + annual_rainfall, 
+fix6 <- lme(PD ~ landuse + soil_pc1 + landuse:soil_pc1,
           random = ~ 1 | pair_id, method = "ML", data = plant)
-anova(M8, M7) # No, new model is M8
+fix7 <- lme(PD ~ landuse + annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix8 <- lme(PD ~ landuse + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix9 <- lme(PD ~ annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix10 <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix11 <- lme(PD ~ annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix12 <- lme(PD ~ soil_pc1, random = ~ 1 | pair_id, method = "ML", data = plant)
+fix13 <- lme(PD ~ 1, random = ~ 1 | pair_id, method = "ML", data = plant)
 
-# Does inclusion of annual_rainfall improve model?
-M9 <- lme(PD ~ landuse, 
-          random = ~ 1 | pair_id, method = "ML", data = plant)
-anova(M9, M8) # No, new model is M9
+# Calculate AICc for each model
+AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, fix13)
 
-# Does inclusion of landuse improve model?
-M10 <- lme(PD ~ 1, 
-           random = ~ 1 | pair_id, method = "ML", data = plant)
-anova(M10, M9) # Yes, final model is M9
+# Compare best model (fix10) to models with similar AICc (fix7, fix8) using
+# likelihood ratio tests
+anova(fix10, fix7)
+anova(fix10, fix8)
 
 # Refit final model with REML
-MF <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "REML", data = plant)
+final <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "REML", data = plant)
 
 #-----------------
 # Model validation
 #-----------------
 
 # Check for linearity and equal variance across range of fitted values
-plot(fitted(MF), residuals(MF))
+plot(fitted(final), residuals(final))
 abline(0,0)
 
 # Check assumption of normality in residuals
-hist(residuals(MF))
-qqnorm(residuals(MF))
-qqline(residuals(MF))
+hist(residuals(final))
+qqnorm(residuals(final))
+qqline(residuals(final))
 
 # Check for relationships between residuals and explanatory variables
-plot(plant$landuse, residuals(MF))
+plot(plant$landuse, residuals(final))
 
+#---------------------
+# Model interpretation
+#---------------------
 
+# Extract coefficients from final model
+summary(final)
 
 #-------------------
 # Creating figure 3a

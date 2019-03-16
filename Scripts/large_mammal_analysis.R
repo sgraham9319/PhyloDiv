@@ -12,10 +12,6 @@
 # 6.  Determining whether PD, MPD, and MNTD are greater or less than 
 #     expected based on SR
 
-
-# 4.  Calculation of PD, SR, MPD, and MNTD response for each plot pair
-# 7.  Summary plots
-
 library(ape)
 library(picante)
 library(geiger)
@@ -73,17 +69,17 @@ dotchart(large_mammal$soil_pc1, main = "Soil")
 source("R/HighstatLibV6.R")
 
 # Create matrix of variables
-Z <- cbind(large_mammal$PD, large_mammal$annual_rainfall, 
+var_mat <- cbind(large_mammal$PD, large_mammal$annual_rainfall, 
            large_mammal$soil_pc1)
-colnames(Z) <- c("PD", "Rain", "Soil")
+colnames(var_mat) <- c("PD", "Rain", "Soil")
 
 # Check for correlation among variables
-pairs(Z, lower.panel = panel.smooth2,
+pairs(var_mat, lower.panel = panel.smooth2,
       upper.panel = panel.cor, diag.panel = panel.hist)
 
 # Some correlation between rainfall and soil degradation (-0.5). Check variance 
 # inflation factors (VIFs)
-corvif(Z)
+corvif(var_mat)
 
 # No VIFs are greater than 3, suggesting that collinearity is not a problem 
 # (Zuur et al. 2007)
@@ -103,19 +99,18 @@ corvif(Z)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-M1 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, method = "REML", data = large_mammal)
-M2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 | ranch, method = "REML", data = large_mammal)
-M3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+               landuse:soil_pc1, random = ~ 1 + annual_rainfall | ranch, 
+             method = "REML", data = large_mammal)
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 + soil_pc1 | ranch,
             control = lmc, method = "REML", data = large_mammal)
-M4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, random = ~ 1 + annual_rainfall | ranch, 
-            method = "REML", data = large_mammal)
+
 
 # Determine which random effects structure is best according to AIC
-AIC(M1, M2, M3, M4) # M2 (random intercepts) is best
+AICc(rand1, rand2, rand3) # M1 (random intercepts) is best
 
 #----------------------------------
 # Check for spatial autocorrelation
@@ -125,7 +120,7 @@ AIC(M1, M2, M3, M4) # M2 (random intercepts) is best
 fit1 <- correlog(x = large_mammal$longitude, y = large_mammal$latitude, 
                  z = large_mammal$PD, increment = 1, resamp = 500,
                  latlon = TRUE)
-plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance class", ylab = "Moran's I",
+plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance (km)", ylab = "Moran's I",
      main = "SAC in PD data")
 
 # There appears to be some SAC among sites that are within 10 km of each other,
@@ -133,11 +128,11 @@ plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance class", ylab = "Mora
 # just under 0.5.
 
 # Now create full model and check residuals for SAC
-M_full <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+full_mod <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
                 landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
 fit2 <- correlog(x = large_mammal$longitude, y = large_mammal$latitude,
-                 z = residuals(M_full), increment = 1, resamp = 500, latlon = TRUE)
-plot(fit2$mean.of.class, fit2$correlation, xlab = "Distance class", 
+                 z = residuals(full_mod), increment = 1, resamp = 500, latlon = TRUE)
+plot(fit2$mean.of.class, fit2$correlation, xlab = "Distance (km)", 
      ylab = "Moran's I", main = "SAC in full model residuals")
 
 # SAC appears to be accounted for by model covariates
@@ -146,30 +141,60 @@ plot(fit2$mean.of.class, fit2$correlation, xlab = "Distance class",
 # Selecting model fixed effects structure
 #----------------------------------------
 
-# Refit full model with ML then select optimal fixed effects structure
-M5 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
-
-# Does inclusion of landuse:soil_pc1 improve model?
-M6 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+# Create models off all combinations of fixed effects
+fix1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+              landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
             random = ~ 1 | ranch, method = "ML", data = large_mammal)
-anova(M6, M5) # Not convinced, new model is M6
+fix3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + 
+              landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix5 <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
+            random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix6 <- lme(PD ~ landuse + soil_pc1 + landuse:soil_pc1,
+            random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix7 <- lme(PD ~ landuse + annual_rainfall, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix8 <- lme(PD ~ landuse + soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix9 <- lme(PD ~ annual_rainfall + soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix10 <- lme(PD ~ landuse, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix11 <- lme(PD ~ annual_rainfall, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix12 <- lme(PD ~ soil_pc1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
+fix13 <- lme(PD ~ 1, random = ~ 1 | ranch, method = "ML", data = large_mammal)
 
-# Does inclusion of landuse:annual_rainfall improve model?
-M7 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, 
-          random = ~ 1 | ranch, method = "ML", data = large_mammal)
-anova(M7, M6) # Yes, model is still M6
+# Calculate AICc for each model
+AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, fix13)
 
-# Does inclusion of soil_pc1 improve model?
-M8 <- lme(PD ~ landuse + annual_rainfall, 
-          random = ~ 1 | ranch, method = "ML", data = large_mammal)
-anova(M8, M6) # Yes, final model is M6
+# Compare best model (fix1) to model with similar AICc (fix2) using
+# likelihood ratio test
+anova(fix2, fix1)
 
 # Refit final model with REML
-MF <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
-          random = ~ 1 | ranch, method = "ML", data = large_mammal)
+final <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+              landuse:soil_pc1, random = ~ 1 | ranch, method = "REML", data = large_mammal)
 
+#-----------------
+# Model validation
+#-----------------
 
+# Check for linearity and equal variance across range of fitted values
+plot(fitted(final), residuals(final))
+abline(0,0)
+
+# Check assumption of normality in residuals
+hist(residuals(final))
+qqnorm(residuals(final))
+qqline(residuals(final))
+
+# Check for relationships between residuals and explanatory variables
+plot(large_mammal$landuse, residuals(final))
+plot(large_mammal$annual_rainfall, residuals(final))
+
+#---------------------
+# Model interpretation
+#---------------------
+
+# Extract coefficients from final model
+summary(final)
 
 
 #-------------------

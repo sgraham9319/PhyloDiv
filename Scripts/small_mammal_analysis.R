@@ -54,16 +54,16 @@ levels(small_mammal$landuse) <- levels(small_mammal$landuse)[c(2, 1, 3, 4)]
 # Data exploration
 #-----------------
 
-# Check distributions of predictor variables
-hist(small_mammal$annual_rainfall)
-hist(small_mammal$soil_pc1)
-
-# Check if the untransformed response variable has a normal distribution
+# Check distribution of dependent variable
 hist(small_mammal$PD)
 qqnorm(small_mammal$PD)
 qqline(small_mammal$PD)
 
-# Look for outliers in each of these variables
+# Check distributions of predictor variables
+hist(small_mammal$annual_rainfall)
+hist(small_mammal$soil_pc1)
+
+# Check for outliers
 dotchart(small_mammal$PD, main = "PD")
 dotchart(small_mammal$annual_rainfall, main = "Rain")
 dotchart(small_mammal$soil_pc1, main = "Soil")
@@ -76,17 +76,17 @@ dotchart(small_mammal$soil_pc1, main = "Soil")
 source("R/HighstatLibV6.R")
 
 # Create matrix of variables
-Z <- cbind(small_mammal$PD, small_mammal$annual_rainfall, 
+var_mat <- cbind(small_mammal$PD, small_mammal$annual_rainfall, 
            small_mammal$soil_pc1)
-colnames(Z) <- c("PD", "Rain", "Soil")
+colnames(var_mat) <- c("PD", "Rain", "Soil")
 
 # Check for correlation among variables
-pairs(Z, lower.panel = panel.smooth2,
+pairs(var_mat, lower.panel = panel.smooth2,
       upper.panel = panel.cor, diag.panel = panel.hist)
 
 # Some correlation between rainfall and soil degradation (-0.5). Check variance 
 # inflation factors (VIFs)
-corvif(Z)
+corvif(var_mat)
 
 # No VIFs are greater than 3, suggesting that collinearity is not a problem 
 # (Zuur et al. 2007)
@@ -106,62 +106,75 @@ corvif(Z)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-M1 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, method = "REML", data = small_mammal)
-M2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = small_mammal)
-M3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = small_mammal)
-M4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
             landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
           control = lmc, method = "REML", data = small_mammal)
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = small_mammal)
 
 # Determine which random effects structure is best according to AIC
-AIC(M1, M2, M3, M4) # M1 no random effects is best
+AICc(rand1, rand2, rand3) # M1 (random intercepts) is best
 
-# Refit full model with ML then select optimal fixed effects structure
-M5 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-            landuse:soil_pc1, method = "ML", data = small_mammal)
+#----------------------------------------
+# Selecting model fixed effects structure
+#----------------------------------------
 
-# Does inclusion of landuse:soil_pc1 improve model?
-M6 <- gls(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall,
-          method = "ML", data = small_mammal)
-anova(M6, M5) # No, new model is M6
+# Create models off all combinations of fixed effects
+fix1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
+              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
+            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + 
+              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix5 <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
+            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix6 <- lme(PD ~ landuse + soil_pc1 + landuse:soil_pc1,
+            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix7 <- lme(PD ~ landuse + annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix8 <- lme(PD ~ landuse + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix9 <- lme(PD ~ annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix10 <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix11 <- lme(PD ~ annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix12 <- lme(PD ~ soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+fix13 <- lme(PD ~ 1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
 
-# Does inclusion of landuse:annual_rainfall improve model?
-M7 <- gls(PD ~ landuse + annual_rainfall + soil_pc1,
-          method = "ML", data = small_mammal)
-anova(M7, M6) # Yes, model is still M6
+# Calculate AICc for each model
+AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, fix13)
 
-# Does inclusion of soil_pc1 improve model?
-M8 <- gls(PD ~ landuse + annual_rainfall + landuse:annual_rainfall,
-          method = "ML", data = small_mammal)
-anova(M8, M6) # No, final model is M8
+# Compare best model (fix5) to model with similar AICc (fix7) using
+# likelihood ratio test
+anova(fix7, fix5)
 
 # Refit final model with REML
-MF <- gls(PD ~ landuse + annual_rainfall + landuse:annual_rainfall,
-          method = "REML", data = small_mammal)
+final <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
+             random = ~ 1 | pair_id, method = "REML", data = small_mammal)
 
 #-----------------
 # Model validation
 #-----------------
 
 # Check for linearity and equal variance across range of fitted values
-plot(fitted(MF), residuals(MF))
+plot(fitted(final), residuals(final))
 abline(0,0)
 
 # Check assumption of normality in residuals
-hist(residuals(MF))
-qqnorm(residuals(MF))
-qqline(residuals(MF))
+hist(residuals(final))
+qqnorm(residuals(final))
+qqline(residuals(final))
 
 # Check for relationships between residuals and explanatory variables
-plot(small_mammal$landuse, residuals(MF))
-plot(small_mammal$annual_rainfall, residuals(MF))
+plot(small_mammal$landuse, residuals(final))
+plot(small_mammal$annual_rainfall, residuals(final))
 
+#---------------------
+# Model interpretation
+#---------------------
 
-
-
+# Extract coefficients from final model
+summary(final)
 
 
 #-------------------
