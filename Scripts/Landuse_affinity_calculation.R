@@ -13,6 +13,8 @@ library(dplyr)
 library(tidyr)
 library(ape)
 library(geiger)
+library(phytools)
+source("R/habitat_preference_functions.R")
 
 #==========
 # 1. Plants
@@ -21,84 +23,114 @@ library(geiger)
 #-------------------------------------
 # Calculating aversions and affinities
 #-------------------------------------
-
-# Load community data
-plant <- read.csv("../Data/PlantRawCom.csv")
+# Load site data
+plant <- read.csv("Data/plant.csv")
 
 # Create subsets for different disturbed land-use types (and their paired 
 # conserved sites)
-ag_pairs <- plant$PairID[which(plant$Landuse == "Agriculture")]
-pas_pairs <- plant$PairID[which(plant$Landuse == "Pastoral")]
-fen_pairs <- plant$PairID[which(plant$Landuse == "Exclosure")]
-ag <- droplevels(plant[which(plant$PairID %in% ag_pairs),])
-pas <- droplevels(plant[which(plant$PairID %in% pas_pairs),])
-fen <- droplevels(plant[which(plant$PairID %in% fen_pairs),])
+ag_pairs <- plant$pair_id[which(plant$landuse == "Agriculture")]
+pas_pairs <- plant$pair_id[which(plant$landuse == "Pastoral")]
+fen_pairs <- plant$pair_id[which(plant$landuse == "Fenced")]
+ag <- droplevels(plant[which(plant$pair_id %in% ag_pairs),])
+pas <- droplevels(plant[which(plant$pair_id %in% pas_pairs),])
+fen <- droplevels(plant[which(plant$pair_id %in% fen_pairs),])
 
 # Summarize abundance data by land-use type for each species
-long_ag <- gather(ag, species, abund, -Site, -Landuse, -PairID)
+long_ag <- ag %>%
+  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 ag_abund <- long_ag %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Agriculture = tapply(abund, Landuse, FUN = sum, na.rm = T)["Agriculture"],
-            Total = sum(abund, na.rm = T))
+  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            agriculture = tapply(abund, landuse, FUN = sum, na.rm = T)["Agriculture"],
+            total = sum(abund, na.rm = T))
 
-long_pas <- gather(pas, species, abund, -Site, -Landuse, -PairID)
+long_pas <- pas %>%
+  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 pas_abund <- long_pas %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Pastoral = tapply(abund, Landuse, FUN = sum, na.rm = T)["Pastoral"],
-            Total = sum(abund, na.rm = T))
+  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            pastoral = tapply(abund, landuse, FUN = sum, na.rm = T)["Pastoral"],
+            total = sum(abund, na.rm = T))
 
-long_fen <- gather(fen, species, abund, -Site, -Landuse, -PairID)
+long_fen <- fen %>%
+  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 fen_abund <- long_fen %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Fenced = tapply(abund, Landuse, FUN = sum, na.rm = T)["Exclosure"],
-            Total = sum(abund, na.rm = T))
+  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            fenced = tapply(abund, landuse, FUN = sum, na.rm = T)["Fenced"],
+            total = sum(abund, na.rm = T))
 
 # Create matrix to store affinity data
 plant_affin <- matrix(NA, nrow = nrow(ag_abund), ncol = 9)
-colnames(plant_affin) <- c("Species", "ConAver", "ConPref", "AgAver", "AgPref", "FenAver", "FenPref", "PasAver", "PasPref")
-plant_affin[, "Species"] <- ag_abund$species
+colnames(plant_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
+plant_affin[, "species"] <- ag_abund$species
 
 for(species in 1:nrow(ag_abund)){
   resamples <- matrix(NA, nrow = 999, ncol = 6)
-  colnames(resamples) <- c("ConA", "Ag", "ConF", "Fen", "ConP", "Pas")
+  colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
   for(i in 1:nrow(resamples)) {
-    resampA <- table(sample(c("Con", "Ag"), ag_abund$Total[species], replace = T))
-    resampF <- table(sample(c("Con", "Fen"), fen_abund$Total[species], replace = T))
-    resampP <- table(sample(c("Con", "Pas"), pas_abund$Total[species], replace = T))
-    resamples[i, "ConA"] <- resampA["Con"]
-    resamples[i, "Ag"] <- resampA["Ag"]
-    resamples[i, "ConF"] <- resampF["Con"]
-    resamples[i, "Fen"] <- resampF["Fen"]
-    resamples[i, "ConP"] <- resampP["Con"]
-    resamples[i, "Pas"] <- resampP["Pas"]
+    resampA <- table(sample(c("con", "ag"), ag_abund$total[species], replace = T))
+    resampF <- table(sample(c("con", "fen"), fen_abund$total[species], replace = T))
+    resampP <- table(sample(c("con", "pas"), pas_abund$total[species], replace = T))
+    resamples[i, "con_a"] <- resampA["con"]
+    resamples[i, "ag"] <- resampA["ag"]
+    resamples[i, "con_f"] <- resampF["con"]
+    resamples[i, "fen"] <- resampF["fen"]
+    resamples[i, "con_p"] <- resampP["con"]
+    resamples[i, "pas"] <- resampP["pas"]
   }
-  if(sum((ag_abund[species, "Conserved"] < quantile(resamples[,"ConA"], probs = 0.025, na.rm = T)), 
-         (fen_abund[species, "Conserved"] < quantile(resamples[,"ConF"], probs = 0.025, na.rm = T)),
-         (pas_abund[species, "Conserved"] < quantile(resamples[,"ConP"], probs = 0.025, na.rm = T)), na.rm = T)
-     >= 2){plant_affin[species, "ConAver"] <- TRUE}
-  else{plant_affin[species, "ConAver"] <- FALSE}
-  if(sum((ag_abund[species, "Conserved"] > quantile(resamples[,"ConA"], probs = 0.975, na.rm = T)), 
-         (fen_abund[species, "Conserved"] > quantile(resamples[,"ConF"], probs = 0.975, na.rm = T)),
-         (pas_abund[species, "Conserved"] > quantile(resamples[,"ConP"], probs = 0.975, na.rm = T)), na.rm = T)
-     >= 2){plant_affin[species, "ConPref"] <- TRUE}
-  else{plant_affin[species, "ConPref"] <- FALSE}  
-  plant_affin[species, "AgAver"] <- ag_abund[species, "Agriculture"] < quantile(resamples[,"Ag"], probs = 0.025, na.rm = T)
-  plant_affin[species, "AgPref"] <- ag_abund[species, "Agriculture"] > quantile(resamples[,"Ag"], probs = 0.975, na.rm = T)
-  plant_affin[species, "FenAver"] <- fen_abund[species, "Fenced"] < quantile(resamples[,"Fen"], probs = 0.025, na.rm = T)
-  plant_affin[species, "FenPref"] <- fen_abund[species, "Fenced"] > quantile(resamples[,"Fen"], probs = 0.975, na.rm = T)
-  plant_affin[species, "PasAver"] <- pas_abund[species, "Pastoral"] < quantile(resamples[,"Pas"], probs = 0.025, na.rm = T)
-  plant_affin[species, "PasPref"] <- pas_abund[species, "Pastoral"] > quantile(resamples[,"Pas"], probs = 0.975, na.rm = T)
+  if(sum((ag_abund[species, "conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
+         (fen_abund[species, "conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
+         (pas_abund[species, "conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
+     >= 2){plant_affin[species, "con_aver"] <- TRUE}
+  else{plant_affin[species, "con_aver"] <- FALSE}
+  if(sum((ag_abund[species, "conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
+         (fen_abund[species, "conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
+         (pas_abund[species, "conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
+     >= 2){plant_affin[species, "con_pref"] <- TRUE}
+  else{plant_affin[species, "con_pref"] <- FALSE}  
+  plant_affin[species, "ag_aver"] <- ag_abund[species, "agriculture"] < quantile(resamples[,"ag"], probs = 0.025, na.rm = T)
+  plant_affin[species, "ag_pref"] <- ag_abund[species, "agriculture"] > quantile(resamples[,"ag"], probs = 0.975, na.rm = T)
+  plant_affin[species, "fen_aver"] <- fen_abund[species, "fenced"] < quantile(resamples[,"fen"], probs = 0.025, na.rm = T)
+  plant_affin[species, "fen_pref"] <- fen_abund[species, "fenced"] > quantile(resamples[,"fen"], probs = 0.975, na.rm = T)
+  plant_affin[species, "pas_aver"] <- pas_abund[species, "pastoral"] < quantile(resamples[,"pas"], probs = 0.025, na.rm = T)
+  plant_affin[species, "pas_pref"] <- pas_abund[species, "pastoral"] > quantile(resamples[,"pas"], probs = 0.975, na.rm = T)
 } # Note that NA values occur when a species was never observed in that land-use type
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- colnames(plant[4:ncol(plant)])[which(apply(plant[, 4:ncol(plant)], MARGIN = 2, FUN = sum) < 30)]
-plant_affin[which(plant_affin[, "Species"] %in% rare_sps), 2:9] <- "RARE"
+rare_sps <- colnames(plant[4:(nrow(plant_affin) + 3)])[which(apply(plant[, 4:(nrow(plant_affin) + 3)], MARGIN = 2, FUN = sum) < 30)]
+plant_affin[which(plant_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
 
 # Load plant phylogeny
-phylo <- read.tree("../Data/PlantPhylo")
+phylo <- read.tree("Data/PlantPhylo")
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
-plant_affin <- plant_affin[match(phylo$tip.label, plant_affin[,"Species"]),]
+plant_affin <- plant_affin[match(phylo$tip.label, plant_affin[,"species"]),]
+
+plot(phylo, type = "fan", cex = 0.5)
+
+trait1 <- plant_affin[, "con_aver"]
+trait1[which(trait1 == "RARE")] <- NA
+trait1[which(trait1 == "TRUE")] <- 1
+trait1[which(trait1 == "FALSE")] <- 0
+trait1 <- as.numeric(trait1)
+
+my.vcv <- vcv.phylo(phylo)
+inv.vcv <- solve(my.vcv)
+
+missing <- which(is.na(trait1))
+trait1 <- trait1[-missing]
+my.vcv1 <- my.vcv[-missing, -missing]
+inv.vcv1 <- solve(my.vcv1)
+
+sum(inv.vcv1 %*% as.matrix(trait1)) / sum(inv.vcv1)
+
 
 #---------------------
 # Creating phylogenies
@@ -110,7 +142,7 @@ plot(phylo, type = "fan", show.tip.label = F, no.margin = T)
 # Create table of affinity data to be consulted when adding colored branches
 # in Illustrator
 affin.table <- as.data.frame(plant_affin[, c(1,3,5,7,9)])
-affin.table <- affin.table %>% mutate_all (as.character)
+affin.table <- affin.table %>% mutate_all(as.character)
 
 # Add column for no affinity/aversion
 total.false.na <- rep(NA, times = nrow(affin.table))
@@ -139,7 +171,7 @@ affin.table[, 5][which(affin.table[, 5] == "TRUE")] <- "ORANGE"
 
 # Repeat to create aversion table
 aver.table <- as.data.frame(plant_affin[, c(1,2,4,6,8)])
-aver.table <- aver.table %>% mutate_all (as.character)
+aver.table <- aver.table %>% mutate_all(as.character)
 
 # Add column for no affinity/aversion
 total.false.na <- rep(NA, times = nrow(aver.table))
@@ -203,99 +235,133 @@ for(i in 1:nrow(aver.table)){
 #-------------------------------------
 
 # Load community data
-s_mamm <- read.csv("../Data/SmMammRawCom.csv")
+raw_site <- read.csv("Data/small_mammal.csv")
 
 # Round abundances to whole numbers
-s_mamm[,3:ncol(s_mamm)] <- round(s_mamm[,3:ncol(s_mamm)])
-
-# Remove pairs not included in linear modeling
-excPairs <- c(9, 29, 30, 31, 34)
-s_mamm <- s_mamm[-which(s_mamm$PairID %in% excPairs),]
+raw_site[, 4:25] <- round(raw_site[, 4:25])
 
 # Create subsets for different disturbed land-use types (and their paired 
 # conserved sites)
-ag_pairs <- s_mamm$PairID[which(s_mamm$Landuse == "Agriculture")]
-pas_pairs <- s_mamm$PairID[which(s_mamm$Landuse == "Pastoral")]
-fen_pairs <- s_mamm$PairID[which(s_mamm$Landuse == "Exclosure")]
-ag <- droplevels(s_mamm[which(s_mamm$PairID %in% ag_pairs),])
-pas <- droplevels(s_mamm[which(s_mamm$PairID %in% pas_pairs),])
-fen <- droplevels(s_mamm[which(s_mamm$PairID %in% fen_pairs),])
+ag_pairs <- raw_site$pair_id[which(raw_site$landuse == "Agriculture")]
+pas_pairs <- raw_site$pair_id[which(raw_site$landuse == "Pastoral")]
+fen_pairs <- raw_site$pair_id[which(raw_site$landuse == "Fenced")]
+ag <- droplevels(raw_site[which(raw_site$pair_id %in% ag_pairs),])
+pas <- droplevels(raw_site[which(raw_site$pair_id %in% pas_pairs),])
+fen <- droplevels(raw_site[which(raw_site$pair_id %in% fen_pairs),])
 
-# Summarize abundance data by land-use for each species
-long_ag <- gather(ag, species, abund, -Site, -Landuse, -PairID)
+# Summarize abundance data by landuse for each species
+long_ag <- ag %>%
+  select(-longitude, -latitude, -annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 ag_abund <- long_ag %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Agriculture = tapply(abund, Landuse, FUN = sum, na.rm = T)["Agriculture"],
-            Total = sum(abund, na.rm = T))
+  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            Agriculture = tapply(abund, landuse, FUN = sum, na.rm = T)["Agriculture"],
+            total = sum(abund, na.rm = T))
 
-long_pas <- gather(pas, species, abund, -Site, -Landuse, -PairID)
+long_pas <- pas %>%
+  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 pas_abund <- long_pas %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Pastoral = tapply(abund, Landuse, FUN = sum, na.rm = T)["Pastoral"],
-            Total = sum(abund, na.rm = T))
+  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            Pastoral = tapply(abund, landuse, FUN = sum, na.rm = T)["Pastoral"],
+            total = sum(abund, na.rm = T))
 
-long_fen <- gather(fen, species, abund, -Site, -Landuse, -PairID)
+long_fen <- fen %>%
+  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+         -soil_pc1, -soil_pc2) %>%
+  gather(species, abund, -site, -landuse, -pair_id)
 fen_abund <- long_fen %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conserved"],
-            Fenced = tapply(abund, Landuse, FUN = sum, na.rm = T)["Exclosure"],
-            Total = sum(abund, na.rm = T))
+  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+            Fenced = tapply(abund, landuse, FUN = sum, na.rm = T)["Fenced"],
+            total = sum(abund, na.rm = T))
+
+# Estimate habitat preference trait
+hab_prefs <- hab_pref_summ(ag_abund, fen_abund, pas_abund)
+
+# Reorder trait data to match order of tip labels in phylogeny
+tip_labels <- data.frame(phylo$tip.label, 1:length(phylo$tip.label))
+colnames(tip_labels) <- c("species", "order_check")
+tip_labels$species <- as.character(tip_labels$species)
+hab_pref_ord <- left_join(tip_labels, hab_prefs)
+output <- matrix(NA, nrow = ncol(hab_pref_ord) - 2, ncol = 2)
+colnames(output) <- c("K", "lambda")
+rownames(output) <- colnames(hab_pref_ord)[3:ncol(hab_pref_ord)]
+for(hab in 3:ncol(hab_pref_ord)){
+  output[hab - 2, 1] <- phylosig(phylo, hab_pref_ord[, hab], method = "K")
+  output[hab - 2, 2] <- phylosig(phylo, hab_pref_ord[, hab], method = "lambda")$lambda
+}
+
+taxa <- phylo$tip.label
+hab_prefs$species %in% taxa
+hab_prefs$species %in% phylo$tip.label
+match(phylo$tip.label, hab_prefs$species)
+x <- hab_prefs[match(taxa, hab_prefs$species),]
+x <- hab_prefs[match(phylo$tip.label, hab_prefs$species),]
+phylosig(phylo, hab_pref_ord[, 3], method = "K", test = TRUE)
+# Compute phylogenetic signal
+phylosig(phylo, z$fenced, method = "K")
+
+# library(picante)
+# new_phylo <- tipShuffle(phylo)
+# new_k <- phylosig(phylo, trait, method = "K")
+# Frishkoff repeated 1000 times to get a null distribution
+
+
 
 # Create matrix to store affinity data
 s_mamm_affin <- matrix(NA, nrow = nrow(ag_abund), ncol = 9)
-colnames(s_mamm_affin) <- c("Species", "ConAver", "ConPref", "AgAver", "AgPref", "FenAver", "FenPref", "PasAver", "PasPref")
-s_mamm_affin[, "Species"] <- ag_abund$species
+colnames(s_mamm_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
+s_mamm_affin[, "species"] <- ag_abund$species
 
 for(species in 1:nrow(ag_abund)){
   resamples <- matrix(NA, nrow = 999, ncol = 6)
-  colnames(resamples) <- c("ConA", "Ag", "ConF", "Fen", "ConP", "Pas")
+  colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
   for(i in 1:nrow(resamples)) {
-    resampA <- table(sample(c("Con", "Ag"), ag_abund$Total[species], replace = T))
-    resampF <- table(sample(c("Con", "Fen"), fen_abund$Total[species], replace = T))
-    resampP <- table(sample(c("Con", "Pas"), pas_abund$Total[species], replace = T))
-    resamples[i, "ConA"] <- resampA["Con"]
-    resamples[i, "Ag"] <- resampA["Ag"]
-    resamples[i, "ConF"] <- resampF["Con"]
-    resamples[i, "Fen"] <- resampF["Fen"]
-    resamples[i, "ConP"] <- resampP["Con"]
-    resamples[i, "Pas"] <- resampP["Pas"]
+    resampA <- table(sample(c("con", "ag"), ag_abund$total[species], replace = T))
+    resampF <- table(sample(c("con", "fen"), fen_abund$total[species], replace = T))
+    resampP <- table(sample(c("con", "pas"), pas_abund$total[species], replace = T))
+    resamples[i, "con_a"] <- resampA["con"]
+    resamples[i, "ag"] <- resampA["ag"]
+    resamples[i, "con_f"] <- resampF["con"]
+    resamples[i, "fen"] <- resampF["fen"]
+    resamples[i, "con_p"] <- resampP["con"]
+    resamples[i, "pas"] <- resampP["pas"]
   }
-  if(sum((ag_abund[species, "Conserved"] < quantile(resamples[,"ConA"], probs = 0.025, na.rm = T)), 
-     (fen_abund[species, "Conserved"] < quantile(resamples[,"ConF"], probs = 0.025, na.rm = T)),
-     (pas_abund[species, "Conserved"] < quantile(resamples[,"ConP"], probs = 0.025, na.rm = T)), na.rm = T)
-     >= 2){s_mamm_affin[species, "ConAver"] <- TRUE}
-  else{s_mamm_affin[species, "ConAver"] <- FALSE}
-  if(sum((ag_abund[species, "Conserved"] > quantile(resamples[,"ConA"], probs = 0.975, na.rm = T)), 
-     (fen_abund[species, "Conserved"] > quantile(resamples[,"ConF"], probs = 0.975, na.rm = T)),
-     (pas_abund[species, "Conserved"] > quantile(resamples[,"ConP"], probs = 0.975, na.rm = T)), na.rm = T)
-     >= 2){s_mamm_affin[species, "ConPref"] <- TRUE}
-  else{s_mamm_affin[species, "ConPref"] <- FALSE}  
-  s_mamm_affin[species, "AgAver"] <- ag_abund[species, "Agriculture"] < quantile(resamples[,"Ag"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "AgPref"] <- ag_abund[species, "Agriculture"] > quantile(resamples[,"Ag"], probs = 0.975, na.rm = T)
-  s_mamm_affin[species, "FenAver"] <- fen_abund[species, "Fenced"] < quantile(resamples[,"Fen"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "FenPref"] <- fen_abund[species, "Fenced"] > quantile(resamples[,"Fen"], probs = 0.975, na.rm = T)
-  s_mamm_affin[species, "PasAver"] <- pas_abund[species, "Pastoral"] < quantile(resamples[,"Pas"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "PasPref"] <- pas_abund[species, "Pastoral"] > quantile(resamples[,"Pas"], probs = 0.975, na.rm = T)
+  if(sum((ag_abund[species, "Conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
+     (fen_abund[species, "Conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
+     (pas_abund[species, "Conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
+     >= 2){s_mamm_affin[species, "con_aver"] <- TRUE}
+  else{s_mamm_affin[species, "con_aver"] <- FALSE}
+  if(sum((ag_abund[species, "Conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
+     (fen_abund[species, "Conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
+     (pas_abund[species, "Conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
+     >= 2){s_mamm_affin[species, "con_pref"] <- TRUE}
+  else{s_mamm_affin[species, "con_pref"] <- FALSE}  
+  s_mamm_affin[species, "ag_aver"] <- ag_abund[species, "Agriculture"] < quantile(resamples[,"ag"], probs = 0.025, na.rm = T)
+  s_mamm_affin[species, "ag_pref"] <- ag_abund[species, "Agriculture"] > quantile(resamples[,"ag"], probs = 0.975, na.rm = T)
+  s_mamm_affin[species, "fen_aver"] <- fen_abund[species, "Fenced"] < quantile(resamples[,"fen"], probs = 0.025, na.rm = T)
+  s_mamm_affin[species, "fen_pref"] <- fen_abund[species, "Fenced"] > quantile(resamples[,"fen"], probs = 0.975, na.rm = T)
+  s_mamm_affin[species, "pas_aver"] <- pas_abund[species, "Pastoral"] < quantile(resamples[,"pas"], probs = 0.025, na.rm = T)
+  s_mamm_affin[species, "pas_pref"] <- pas_abund[species, "Pastoral"] > quantile(resamples[,"pas"], probs = 0.975, na.rm = T)
 } # Note that NA values occur when a species was never observed in that land-use type
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- colnames(s_mamm[4:ncol(s_mamm)])[which(apply(s_mamm[, 4:ncol(s_mamm)], MARGIN = 2, FUN = sum) < 30)]
-s_mamm_affin[which(s_mamm_affin[, "Species"] %in% rare_sps), 2:9] <- "RARE"
+rare_sps <- colnames(raw_site[4:ncol(raw_site)])[which(apply(raw_site[, 4:ncol(raw_site)], MARGIN = 2, FUN = sum) < 30)]
+s_mamm_affin[which(s_mamm_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
 
 # Load mammal supertree
-mammal.tree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
+supertree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
 
-# Select the "bestDates" tree
-mammal.tree <- mammal.tree$mammalST_bestDates
-
-# Load small mammal community data
-rawCom <- read.csv("../Data/Diurnal excluded com data.csv")
-
-# Prune supertree to only the sampled taxa
-smammal <- as.matrix(t(s_mamm[, -c(2,3)]))
-phylo <- treedata(mammal.tree, smammal)$phy
+# Create tree of sampled small mammal taxa
+phylo <- subset_supertree(raw_site, supertree, 4:25)
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
-s_mamm_affin <- s_mamm_affin[match(phylo$tip.label, s_mamm_affin[,"Species"]),]
+s_mamm_affin <- s_mamm_affin[match(phylo$tip.label, s_mamm_affin[,"species"]),]
 
 #---------------------
 # Creating phylogenies
@@ -307,7 +373,7 @@ plot(phylo, type = "fan", show.tip.label = T, no.margin = T)
 # Create table of affinity data to be consulted when adding colored branches
 # in Illustrator
 affin.table <- as.data.frame(s_mamm_affin[, c(1,3,5,7,9)])
-affin.table <- affin.table %>% mutate_all (as.character)
+affin.table <- affin.table %>% mutate_all(as.character)
 
 # Add column for no affinity/aversion
 total.false.na <- rep(NA, times = nrow(affin.table))
@@ -336,7 +402,7 @@ affin.table[, 5][which(affin.table[, 5] == "TRUE")] <- "ORANGE"
 
 # Repeat to create aversion table
 aver.table <- as.data.frame(s_mamm_affin[, c(1,2,4,6,8)])
-aver.table <- aver.table %>% mutate_all (as.character)
+aver.table <- aver.table %>% mutate_all(as.character)
 
 # Add column for no affinity/aversion
 total.false.na <- rep(NA, times = nrow(aver.table))
@@ -391,6 +457,26 @@ for(i in 1:nrow(aver.table)){
 }
 100 * (sum(num_dist_aver < 3) / num_taxa) # Add value to table S3
 
+#==============================================
+# Testing for phylogenetic signal in affinities
+#==============================================
+
+agriculture <- ag_abund$Agriculture / ag_abund$total
+fenced <- fen_abund$Fenced / fen_abund$total
+pastoral <- pas_abund$Pastoral / pas_abund$total
+con_ag <- ag_abund$Conserved / ag_abund$total
+con_fen <- fen_abund$Conserved / fen_abund$total
+con_pas <- pas_abund$Conserved / pas_abund$total
+phy_sig_dat <- data.frame(agriculture, fenced, pastoral, con_ag, con_fen, con_pas)
+phy_sig_dat$conserved <- apply(phy_sig_dat[, 4:6], 1, mean, na.rm = T)
+phy_sig_dat$species <- ag_abund$species
+
+# Reorder trait data to match order of tip labels in phylogeny
+phy_sig_dat <- phy_sig_dat[match(phylo$tip.label, phy_sig_dat[,"species"]),]
+
+# Compute phylogenetic signal
+phylosig(phylo, phy_sig_dat$conserved, method = "K")
+
 #=================
 # 3. Large mammals
 #=================
@@ -421,42 +507,42 @@ l_mamm_abund <- l_mamm_long %>% group_by(species) %>%
   summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conservancy"],
             Fenced = tapply(abund, Landuse, FUN = sum, na.rm = T)["Fenced"],
             Pastoral = tapply(abund, Landuse, FUN = sum, na.rm = T)["Pastoral"],
-            Total = sum(abund, na.rm = T))
+            total = sum(abund, na.rm = T))
 
 # Round total abundance values to whole numbers
-l_mamm_abund$TotalR <- round(l_mamm_abund$Total)
+l_mamm_abund$totalR <- round(l_mamm_abund$total)
 
 # Create matrix to store affinity data
 l_mamm_affin <- matrix(NA, nrow = nrow(l_mamm_abund), ncol = 7)
-colnames(l_mamm_affin) <- c("Species", "ConAver", "ConPref", "FenAver", "FenPref", "PasAver", "PasPref")
-l_mamm_affin[, "Species"] <- l_mamm_abund$species
+colnames(l_mamm_affin) <- c("species", "con_aver", "con_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
+l_mamm_affin[, "species"] <- l_mamm_abund$species
 
 # Calculate affinities
 for(species in 1:nrow(l_mamm_abund)){
   resamples <- matrix(NA, nrow = 999, ncol = 3)
   colnames(resamples) <- c("Con", "Fen", "Pas")
   for(i in 1:nrow(resamples)) {
-    resamp <- table(sample(c("Con", "Fen", "Pas"), l_mamm_abund$TotalR[species], 
+    resamp <- table(sample(c("Con", "Fen", "Pas"), l_mamm_abund$totalR[species], 
                                   replace = T, prob = table(l_mamm$Landuse)/nrow(l_mamm)))
     resamples[i, "Con"] <- resamp["Con"]
     resamples[i, "Fen"] <- resamp["Fen"]
     resamples[i, "Pas"] <- resamp["Pas"]
   }
-  l_mamm_affin[species, "ConAver"] <- l_mamm_abund[species, "Conserved"] < quantile(resamples[,"Con"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "ConPref"] <- l_mamm_abund[species, "Conserved"] > quantile(resamples[,"Con"], probs = 0.975, na.rm = T)
-  l_mamm_affin[species, "FenAver"] <- l_mamm_abund[species, "Fenced"] < quantile(resamples[,"Fen"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "FenPref"] <- l_mamm_abund[species, "Fenced"] > quantile(resamples[,"Fen"], probs = 0.975, na.rm = T)
-  l_mamm_affin[species, "PasAver"] <- l_mamm_abund[species, "Pastoral"] < quantile(resamples[,"Pas"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "PasPref"] <- l_mamm_abund[species, "Pastoral"] > quantile(resamples[,"Pas"], probs = 0.975, na.rm = T)
+  l_mamm_affin[species, "con_aver"] <- l_mamm_abund[species, "Conserved"] < quantile(resamples[,"Con"], probs = 0.025, na.rm = T)
+  l_mamm_affin[species, "con_pref"] <- l_mamm_abund[species, "Conserved"] > quantile(resamples[,"Con"], probs = 0.975, na.rm = T)
+  l_mamm_affin[species, "fen_aver"] <- l_mamm_abund[species, "Fenced"] < quantile(resamples[,"Fen"], probs = 0.025, na.rm = T)
+  l_mamm_affin[species, "fen_pref"] <- l_mamm_abund[species, "Fenced"] > quantile(resamples[,"Fen"], probs = 0.975, na.rm = T)
+  l_mamm_affin[species, "pas_aver"] <- l_mamm_abund[species, "Pastoral"] < quantile(resamples[,"Pas"], probs = 0.025, na.rm = T)
+  l_mamm_affin[species, "pas_pref"] <- l_mamm_abund[species, "Pastoral"] > quantile(resamples[,"Pas"], probs = 0.975, na.rm = T)
 }
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- l_mamm_abund$species[which(prop.table(l_mamm_abund$TotalR) < 0.001)]
-l_mamm_affin[which(l_mamm_affin[, "Species"] %in% rare_sps), 2:7] <- "RARE"
+rare_sps <- l_mamm_abund$species[which(prop.table(l_mamm_abund$totalR) < 0.001)]
+l_mamm_affin[which(l_mamm_affin[, "species"] %in% rare_sps), 2:7] <- "RARE"
 
 # Replace common names with latin binomials
 taxa_names <- read.csv("../Data/Large_mammal_species_list.csv")
-l_mamm_affin[, "Species"] <- as.character(taxa_names$Representative_in_supertree[match(l_mamm_affin[,"Species"], taxa_names$Spaces_removed_name)])
+l_mamm_affin[, "species"] <- as.character(taxa_names$Representative_in_supertree[match(l_mamm_affin[,"species"], taxa_names$Spaces_removed_name)])
 
 # Create large mammal phylogeny
 raw_com <- l_mamm[, c(3, 7:ncol(l_mamm))]
@@ -465,7 +551,7 @@ com <- as.matrix(t(raw_com))
 phylo <- treedata(mammal.tree, com)$phy
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
-l_mamm_affin <- l_mamm_affin[match(phylo$tip.label, l_mamm_affin[,"Species"]),]
+l_mamm_affin <- l_mamm_affin[match(phylo$tip.label, l_mamm_affin[,"species"]),]
 
 #---------------------
 # Creating phylogenies
@@ -563,14 +649,14 @@ for(i in 1:nrow(aver.table)){
 # 4. Creating supplementary table
 #================================
 
-# Add AgAver and AgPref columns to large mammal data
+# Add ag_aver and ag_pref columns to large mammal data
 l_mamm_affin <- cbind(l_mamm_affin, rep(NA, times = nrow(l_mamm_affin)), rep(NA, times = nrow(l_mamm_affin)))
 
 # Reorder columns of large mammal data to match plants and small mammals
 l_mamm_affin <- l_mamm_affin[,c(1:3, 8, 9, 4:7)]
 
 # Rename columns
-colnames(l_mamm_affin) <- c("Species", "ConAver", "ConPref", "AgAver", "AgPref", "FenAver", "FenPref", "PasAver", "PasPref")
+colnames(l_mamm_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
 
 # Combine three taxonomic groups
 affin <- rbind(plant_affin, s_mamm_affin, l_mamm_affin)
@@ -578,9 +664,9 @@ affin <- data.frame(affin)
 
 # Include real name for large mammal taxa as congenerics were used when the sampled
 # species did not occur in the tree
-real_name_lm <- as.character(taxa_names$Binomial[match(l_mamm_affin[, "Species"], taxa_names$Representative_in_supertree)])
-real_name_plant <- plant_affin[,"Species"]
-real_name_sm <- s_mamm_affin[, "Species"]
+real_name_lm <- as.character(taxa_names$Binomial[match(l_mamm_affin[, "species"], taxa_names$Representative_in_supertree)])
+real_name_plant <- plant_affin[,"species"]
+real_name_sm <- s_mamm_affin[, "species"]
 affin$real_name <- c(real_name_plant, real_name_sm, real_name_lm)
 
 # Change name for single small mammal species that had different name in tree
@@ -598,14 +684,14 @@ substr(affin$real_name, 1, 1) <- toupper(substr(affin$real_name, 1, 1))
 
 # Add family information to affinities data
 family <- read.csv("../Data/Family_info_all_taxa.csv")
-affin$Family <- as.character(family$Family[match(affin$real_name, family$Species)])
+affin$Family <- as.character(family$Family[match(affin$real_name, family$species)])
 
 # Add old aversion data
-affin$old_aversion <- as.character(family$Old.aversion[match(affin$real_name, family$Species)])
+affin$old_aversion <- as.character(family$Old.aversion[match(affin$real_name, family$species)])
 
 # Format for table S2
 tableS2 <- affin[,c(11, 10, 12, 2:9, 13)]
-colnames(tableS2)[2] <- "Species"
+colnames(tableS2)[2] <- "species"
 
 # Write to csv
 write.csv(tableS2, file = "../Data/Plot data/Table_S2.csv", row.names = F)
