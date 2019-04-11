@@ -48,42 +48,8 @@ phylo <- read.tree("Data/PlantPhylo")
 # Calculate phylogenetic signal
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
 
-# Create matrix to store affinity data
-plant_affin <- matrix(NA, nrow = nrow(abundance[[1]]), ncol = 9)
-colnames(plant_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
-plant_affin[, "species"] <- abundance[[1]]$species
-
-for(species in 1:nrow(abundance[[1]])){
-  resamples <- matrix(NA, nrow = 999, ncol = 6)
-  colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
-  for(i in 1:nrow(resamples)) {
-    resampA <- table(sample(c("con", "ag"), abundance[[1]]$total[species], replace = T))
-    resampF <- table(sample(c("con", "fen"), abundance[[2]]$total[species], replace = T))
-    resampP <- table(sample(c("con", "pas"), abundance[[3]]$total[species], replace = T))
-    resamples[i, "con_a"] <- resampA["con"]
-    resamples[i, "ag"] <- resampA["ag"]
-    resamples[i, "con_f"] <- resampF["con"]
-    resamples[i, "fen"] <- resampF["fen"]
-    resamples[i, "con_p"] <- resampP["con"]
-    resamples[i, "pas"] <- resampP["pas"]
-  }
-  if(sum((abundance[[1]][species, "Conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
-         (abundance[[2]][species, "Conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
-         (abundance[[3]][species, "Conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
-     >= 2){plant_affin[species, "con_aver"] <- TRUE}
-  else{plant_affin[species, "con_aver"] <- FALSE}
-  if(sum((abundance[[1]][species, "Conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
-         (abundance[[2]][species, "Conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
-         (abundance[[3]][species, "Conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
-     >= 2){plant_affin[species, "con_pref"] <- TRUE}
-  else{plant_affin[species, "con_pref"] <- FALSE}  
-  plant_affin[species, "ag_aver"] <- abundance[[1]][species, "Agriculture"] < quantile(resamples[, "ag"], probs = 0.025, na.rm = T)
-  plant_affin[species, "ag_pref"] <- abundance[[1]][species, "Agriculture"] > quantile(resamples[, "ag"], probs = 0.975, na.rm = T)
-  plant_affin[species, "fen_aver"] <- abundance[[2]][species, "Fenced"] < quantile(resamples[, "fen"], probs = 0.025, na.rm = T)
-  plant_affin[species, "fen_pref"] <- abundance[[2]][species, "Fenced"] > quantile(resamples[, "fen"], probs = 0.975, na.rm = T)
-  plant_affin[species, "pas_aver"] <- abundance[[3]][species, "Pastoral"] < quantile(resamples[, "pas"], probs = 0.025, na.rm = T)
-  plant_affin[species, "pas_pref"] <- abundance[[3]][species, "Pastoral"] > quantile(resamples[, "pas"], probs = 0.975, na.rm = T)
-} # Note that NA values occur when a species was never observed in that land-use type
+# Identify significant landuse affinities and aversions
+plant_affin <- affin_signif(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Change affinities of rarely sampled species to "Rare"
 plant_affin[which(plant_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
