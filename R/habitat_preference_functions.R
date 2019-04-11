@@ -148,3 +148,49 @@ abund_summ <- function(comm_dat){
   # Return output
   total_abund
 }
+
+#======================================================
+# Identify significant landuse aversions and affinities
+#======================================================
+
+# Create matrix to store affinity data
+affin_signif <- function(ag_dat, fen_dat, pas_dat){
+  affin <- matrix(NA, nrow = nrow(ag_dat), ncol = 9)
+  colnames(affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
+  affin[, "species"] <- ag_dat$species
+  
+  for(species in 1:nrow(ag_dat)){
+    resamples <- matrix(NA, nrow = 999, ncol = 6)
+    colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
+    for(i in 1:nrow(resamples)) {
+      resampA <- table(sample(c("con", "ag"), ag_dat$total[species], replace = T))
+      resampF <- table(sample(c("con", "fen"), fen_dat$total[species], replace = T))
+      resampP <- table(sample(c("con", "pas"), pas_dat$total[species], replace = T))
+      resamples[i, "con_a"] <- resampA["con"]
+      resamples[i, "ag"] <- resampA["ag"]
+      resamples[i, "con_f"] <- resampF["con"]
+      resamples[i, "fen"] <- resampF["fen"]
+      resamples[i, "con_p"] <- resampP["con"]
+      resamples[i, "pas"] <- resampP["pas"]
+    }
+    if(sum((ag_dat[species, "Conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
+           (fen_dat[species, "Conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
+           (pas_dat[species, "Conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
+       >= 2){affin[species, "con_aver"] <- TRUE}
+    else{affin[species, "con_aver"] <- FALSE}
+    if(sum((ag_dat[species, "Conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
+           (fen_dat[species, "Conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
+           (pas_dat[species, "Conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
+       >= 2){affin[species, "con_pref"] <- TRUE}
+    else{affin[species, "con_pref"] <- FALSE}  
+    affin[species, "ag_aver"] <- ag_dat[species, "Agriculture"] < quantile(resamples[, "ag"], probs = 0.025, na.rm = T)
+    affin[species, "ag_pref"] <- ag_dat[species, "Agriculture"] > quantile(resamples[, "ag"], probs = 0.975, na.rm = T)
+    affin[species, "fen_aver"] <- fen_dat[species, "Fenced"] < quantile(resamples[, "fen"], probs = 0.025, na.rm = T)
+    affin[species, "fen_pref"] <- fen_dat[species, "Fenced"] > quantile(resamples[, "fen"], probs = 0.975, na.rm = T)
+    affin[species, "pas_aver"] <- pas_dat[species, "Pastoral"] < quantile(resamples[, "pas"], probs = 0.025, na.rm = T)
+    affin[species, "pas_pref"] <- pas_dat[species, "Pastoral"] > quantile(resamples[, "pas"], probs = 0.975, na.rm = T)
+  } # Note that NA values occur when a species was never obs
+  
+  # Return output
+  affin
+}

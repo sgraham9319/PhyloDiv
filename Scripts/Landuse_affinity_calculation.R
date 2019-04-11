@@ -35,9 +35,9 @@ abundance <- abund_summ(plant)
 # Identify rare species and exclude from habitat preference evaluation
 rare_sps <- names(which(apply(plant[, 1:nrow(abundance[[1]]) + 3], 2, sum) < 30))
 rare_sps_rows <- which(abundance[[1]]$species %in% rare_sps)
-abundance[[1]]$total[rare_sps_rows] <- NA
-abundance[[2]]$total[rare_sps_rows] <- NA
-abundance[[3]]$total[rare_sps_rows] <- NA
+abundance[[1]][, 2:4][rare_sps_rows, ] <- 0
+abundance[[2]][, 2:4][rare_sps_rows, ] <- 0
+abundance[[3]][, 2:4][rare_sps_rows, ] <- 0
 
 # Estimate habitat preference trait
 hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
@@ -47,7 +47,6 @@ phylo <- read.tree("Data/PlantPhylo")
 
 # Calculate phylogenetic signal
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
-
 
 # Create matrix to store affinity data
 plant_affin <- matrix(NA, nrow = nrow(abundance[[1]]), ncol = 9)
@@ -87,7 +86,6 @@ for(species in 1:nrow(abundance[[1]])){
 } # Note that NA values occur when a species was never observed in that land-use type
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- colnames(plant[4:(nrow(plant_affin) + 3)])[which(apply(plant[, 4:(nrow(plant_affin) + 3)], MARGIN = 2, FUN = sum) < 30)]
 plant_affin[which(plant_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
@@ -205,6 +203,13 @@ raw_site[, 4:25] <- round(raw_site[, 4:25])
 # Summarize abundance data by landuse for each species
 abundance <- abund_summ(raw_site)
 
+# Identify rare species and exclude from habitat preference evaluation
+rare_sps <- names(which(apply(raw_site[, 1:nrow(abundance[[1]]) + 3], 2, sum) < 30))
+rare_sps_rows <- which(abundance[[1]]$species %in% rare_sps)
+abundance[[1]][, 2:4][rare_sps_rows, ] <- 0
+abundance[[2]][, 2:4][rare_sps_rows, ] <- 0
+abundance[[3]][, 2:4][rare_sps_rows, ] <- 0
+
 # Estimate habitat preference trait
 hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
@@ -217,59 +222,14 @@ phylo <- subset_supertree(raw_site, supertree, 4:25)
 # Calculate phylogenetic signal
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
 
-
-
-
-
-
-
-
-
-
-
-# Create matrix to store affinity data
-s_mamm_affin <- matrix(NA, nrow = nrow(ag_abund), ncol = 9)
-colnames(s_mamm_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
-s_mamm_affin[, "species"] <- ag_abund$species
-
-for(species in 1:nrow(ag_abund)){
-  resamples <- matrix(NA, nrow = 999, ncol = 6)
-  colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
-  for(i in 1:nrow(resamples)) {
-    resampA <- table(sample(c("con", "ag"), ag_abund$total[species], replace = T))
-    resampF <- table(sample(c("con", "fen"), fen_abund$total[species], replace = T))
-    resampP <- table(sample(c("con", "pas"), pas_abund$total[species], replace = T))
-    resamples[i, "con_a"] <- resampA["con"]
-    resamples[i, "ag"] <- resampA["ag"]
-    resamples[i, "con_f"] <- resampF["con"]
-    resamples[i, "fen"] <- resampF["fen"]
-    resamples[i, "con_p"] <- resampP["con"]
-    resamples[i, "pas"] <- resampP["pas"]
-  }
-  if(sum((ag_abund[species, "Conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
-     (fen_abund[species, "Conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
-     (pas_abund[species, "Conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
-     >= 2){s_mamm_affin[species, "con_aver"] <- TRUE}
-  else{s_mamm_affin[species, "con_aver"] <- FALSE}
-  if(sum((ag_abund[species, "Conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
-     (fen_abund[species, "Conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
-     (pas_abund[species, "Conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
-     >= 2){s_mamm_affin[species, "con_pref"] <- TRUE}
-  else{s_mamm_affin[species, "con_pref"] <- FALSE}  
-  s_mamm_affin[species, "ag_aver"] <- ag_abund[species, "Agriculture"] < quantile(resamples[,"ag"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "ag_pref"] <- ag_abund[species, "Agriculture"] > quantile(resamples[,"ag"], probs = 0.975, na.rm = T)
-  s_mamm_affin[species, "fen_aver"] <- fen_abund[species, "Fenced"] < quantile(resamples[,"fen"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "fen_pref"] <- fen_abund[species, "Fenced"] > quantile(resamples[,"fen"], probs = 0.975, na.rm = T)
-  s_mamm_affin[species, "pas_aver"] <- pas_abund[species, "Pastoral"] < quantile(resamples[,"pas"], probs = 0.025, na.rm = T)
-  s_mamm_affin[species, "pas_pref"] <- pas_abund[species, "Pastoral"] > quantile(resamples[,"pas"], probs = 0.975, na.rm = T)
-} # Note that NA values occur when a species was never observed in that land-use type
+# Identify significant landuse affinities and aversions
+s_mamm_affin <- affin_signif(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- colnames(raw_site[4:ncol(raw_site)])[which(apply(raw_site[, 4:ncol(raw_site)], MARGIN = 2, FUN = sum) < 30)]
 s_mamm_affin[which(s_mamm_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
-s_mamm_affin <- s_mamm_affin[match(phylo$tip.label, s_mamm_affin[,"species"]),]
+s_mamm_affin <- s_mamm_affin[match(phylo$tip.label, s_mamm_affin[, "species"]),]
 
 #---------------------
 # Creating phylogenies
