@@ -106,3 +106,45 @@ long <- function(dat){
            -soil_pc1, -soil_pc2) %>%
     gather(species, abund, -site, -landuse, -pair_id)
 }
+
+#================================================
+# Summarize long format abundance data by species
+#================================================
+
+abund <- function(long_dat, dist_landuse_type){
+  output <- long_dat %>% group_by(species) %>%
+    summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
+              Dist_land = tapply(abund, landuse, FUN = sum, na.rm = T)[dist_landuse_type],
+              total = sum(abund, na.rm = T))
+  colnames(output)[3] <- dist_landuse_type
+  output
+}
+
+#==========================================================
+# Summarize abundance data by landuse type for each species
+#==========================================================
+
+abund_summ <- function(comm_dat){
+  
+  # Separate data by landuse type of the plot pair
+  ag_pairs <- comm_dat$pair_id[which(comm_dat$landuse == "Agriculture")]
+  pas_pairs <- comm_dat$pair_id[which(comm_dat$landuse == "Pastoral")]
+  fen_pairs <- comm_dat$pair_id[which(comm_dat$landuse == "Fenced")]
+  ag <- droplevels(comm_dat[which(comm_dat$pair_id %in% ag_pairs),])
+  pas <- droplevels(comm_dat[which(comm_dat$pair_id %in% pas_pairs),])
+  fen <- droplevels(comm_dat[which(comm_dat$pair_id %in% fen_pairs),])
+  
+  # Summarize abundance for each species
+  long_ag <- long(ag)
+  ag_abund <- abund(long_ag, "Agriculture")
+  long_fen <- long(fen)
+  fen_abund <- abund(long_fen, "Fenced")
+  long_pas <- long(pas)
+  pas_abund <- abund(long_pas, "Pastoral")
+  
+  # Combine landuse types into single output
+  total_abund <- list(ag_abund, fen_abund, pas_abund)
+  
+  # Return output
+  total_abund
+}

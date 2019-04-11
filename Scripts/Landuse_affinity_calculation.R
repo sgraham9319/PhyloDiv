@@ -25,61 +25,42 @@ source("R/utils.R")
 #-------------------------------------
 # Calculating aversions and affinities
 #-------------------------------------
-# Load site data
+
+# Load community data
 plant <- read.csv("Data/plant.csv")
 
-# Create subsets for different disturbed land-use types (and their paired 
-# conserved sites)
-ag_pairs <- plant$pair_id[which(plant$landuse == "Agriculture")]
-pas_pairs <- plant$pair_id[which(plant$landuse == "Pastoral")]
-fen_pairs <- plant$pair_id[which(plant$landuse == "Fenced")]
-ag <- droplevels(plant[which(plant$pair_id %in% ag_pairs),])
-pas <- droplevels(plant[which(plant$pair_id %in% pas_pairs),])
-fen <- droplevels(plant[which(plant$pair_id %in% fen_pairs),])
+# Summarize abundance data by landuse for each species
+abundance <- abund_summ(plant)
 
-# Summarize abundance data by land-use type for each species
-long_ag <- ag %>%
-  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
-ag_abund <- long_ag %>% group_by(species) %>%
-  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            agriculture = tapply(abund, landuse, FUN = sum, na.rm = T)["Agriculture"],
-            total = sum(abund, na.rm = T))
+# Identify rare species and exclude from habitat preference evaluation
+rare_sps <- names(which(apply(plant[, 1:nrow(abundance[[1]]) + 3], 2, sum) < 30))
+rare_sps_rows <- which(abundance[[1]]$species %in% rare_sps)
+abundance[[1]]$total[rare_sps_rows] <- NA
+abundance[[2]]$total[rare_sps_rows] <- NA
+abundance[[3]]$total[rare_sps_rows] <- NA
 
-long_pas <- pas %>%
-  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
-pas_abund <- long_pas %>% group_by(species) %>%
-  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            pastoral = tapply(abund, landuse, FUN = sum, na.rm = T)["Pastoral"],
-            total = sum(abund, na.rm = T))
+# Estimate habitat preference trait
+hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
-long_fen <- fen %>%
-  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
-fen_abund <- long_fen %>% group_by(species) %>%
-  summarise(conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            fenced = tapply(abund, landuse, FUN = sum, na.rm = T)["Fenced"],
-            total = sum(abund, na.rm = T))
+# Load plant phylogeny
+phylo <- read.tree("Data/PlantPhylo")
+
+# Calculate phylogenetic signal
+signal_summary <- phy_sig_summ(hab_prefs, phylo)
+
 
 # Create matrix to store affinity data
-plant_affin <- matrix(NA, nrow = nrow(ag_abund), ncol = 9)
+plant_affin <- matrix(NA, nrow = nrow(abundance[[1]]), ncol = 9)
 colnames(plant_affin) <- c("species", "con_aver", "con_pref", "ag_aver", "ag_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
-plant_affin[, "species"] <- ag_abund$species
+plant_affin[, "species"] <- abundance[[1]]$species
 
-for(species in 1:nrow(ag_abund)){
+for(species in 1:nrow(abundance[[1]])){
   resamples <- matrix(NA, nrow = 999, ncol = 6)
   colnames(resamples) <- c("con_a", "ag", "con_f", "fen", "con_p", "pas")
   for(i in 1:nrow(resamples)) {
-    resampA <- table(sample(c("con", "ag"), ag_abund$total[species], replace = T))
-    resampF <- table(sample(c("con", "fen"), fen_abund$total[species], replace = T))
-    resampP <- table(sample(c("con", "pas"), pas_abund$total[species], replace = T))
+    resampA <- table(sample(c("con", "ag"), abundance[[1]]$total[species], replace = T))
+    resampF <- table(sample(c("con", "fen"), abundance[[2]]$total[species], replace = T))
+    resampP <- table(sample(c("con", "pas"), abundance[[3]]$total[species], replace = T))
     resamples[i, "con_a"] <- resampA["con"]
     resamples[i, "ag"] <- resampA["ag"]
     resamples[i, "con_f"] <- resampF["con"]
@@ -87,51 +68,30 @@ for(species in 1:nrow(ag_abund)){
     resamples[i, "con_p"] <- resampP["con"]
     resamples[i, "pas"] <- resampP["pas"]
   }
-  if(sum((ag_abund[species, "conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
-         (fen_abund[species, "conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
-         (pas_abund[species, "conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
+  if(sum((abundance[[1]][species, "Conserved"] < quantile(resamples[,"con_a"], probs = 0.025, na.rm = T)), 
+         (abundance[[2]][species, "Conserved"] < quantile(resamples[,"con_f"], probs = 0.025, na.rm = T)),
+         (abundance[[3]][species, "Conserved"] < quantile(resamples[,"con_p"], probs = 0.025, na.rm = T)), na.rm = T)
      >= 2){plant_affin[species, "con_aver"] <- TRUE}
   else{plant_affin[species, "con_aver"] <- FALSE}
-  if(sum((ag_abund[species, "conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
-         (fen_abund[species, "conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
-         (pas_abund[species, "conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
+  if(sum((abundance[[1]][species, "Conserved"] > quantile(resamples[,"con_a"], probs = 0.975, na.rm = T)), 
+         (abundance[[2]][species, "Conserved"] > quantile(resamples[,"con_f"], probs = 0.975, na.rm = T)),
+         (abundance[[3]][species, "Conserved"] > quantile(resamples[,"con_p"], probs = 0.975, na.rm = T)), na.rm = T)
      >= 2){plant_affin[species, "con_pref"] <- TRUE}
   else{plant_affin[species, "con_pref"] <- FALSE}  
-  plant_affin[species, "ag_aver"] <- ag_abund[species, "agriculture"] < quantile(resamples[,"ag"], probs = 0.025, na.rm = T)
-  plant_affin[species, "ag_pref"] <- ag_abund[species, "agriculture"] > quantile(resamples[,"ag"], probs = 0.975, na.rm = T)
-  plant_affin[species, "fen_aver"] <- fen_abund[species, "fenced"] < quantile(resamples[,"fen"], probs = 0.025, na.rm = T)
-  plant_affin[species, "fen_pref"] <- fen_abund[species, "fenced"] > quantile(resamples[,"fen"], probs = 0.975, na.rm = T)
-  plant_affin[species, "pas_aver"] <- pas_abund[species, "pastoral"] < quantile(resamples[,"pas"], probs = 0.025, na.rm = T)
-  plant_affin[species, "pas_pref"] <- pas_abund[species, "pastoral"] > quantile(resamples[,"pas"], probs = 0.975, na.rm = T)
+  plant_affin[species, "ag_aver"] <- abundance[[1]][species, "Agriculture"] < quantile(resamples[, "ag"], probs = 0.025, na.rm = T)
+  plant_affin[species, "ag_pref"] <- abundance[[1]][species, "Agriculture"] > quantile(resamples[, "ag"], probs = 0.975, na.rm = T)
+  plant_affin[species, "fen_aver"] <- abundance[[2]][species, "Fenced"] < quantile(resamples[, "fen"], probs = 0.025, na.rm = T)
+  plant_affin[species, "fen_pref"] <- abundance[[2]][species, "Fenced"] > quantile(resamples[, "fen"], probs = 0.975, na.rm = T)
+  plant_affin[species, "pas_aver"] <- abundance[[3]][species, "Pastoral"] < quantile(resamples[, "pas"], probs = 0.025, na.rm = T)
+  plant_affin[species, "pas_pref"] <- abundance[[3]][species, "Pastoral"] > quantile(resamples[, "pas"], probs = 0.975, na.rm = T)
 } # Note that NA values occur when a species was never observed in that land-use type
 
 # Change affinities of rarely sampled species to "Rare"
 rare_sps <- colnames(plant[4:(nrow(plant_affin) + 3)])[which(apply(plant[, 4:(nrow(plant_affin) + 3)], MARGIN = 2, FUN = sum) < 30)]
 plant_affin[which(plant_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
 
-# Load plant phylogeny
-phylo <- read.tree("Data/PlantPhylo")
-
 # Reorder aversion data so they match the order of tip labels in phylogeny
 plant_affin <- plant_affin[match(phylo$tip.label, plant_affin[,"species"]),]
-
-plot(phylo, type = "fan", cex = 0.5)
-
-trait1 <- plant_affin[, "con_aver"]
-trait1[which(trait1 == "RARE")] <- NA
-trait1[which(trait1 == "TRUE")] <- 1
-trait1[which(trait1 == "FALSE")] <- 0
-trait1 <- as.numeric(trait1)
-
-my.vcv <- vcv.phylo(phylo)
-inv.vcv <- solve(my.vcv)
-
-missing <- which(is.na(trait1))
-trait1 <- trait1[-missing]
-my.vcv1 <- my.vcv[-missing, -missing]
-inv.vcv1 <- solve(my.vcv1)
-
-sum(inv.vcv1 %*% as.matrix(trait1)) / sum(inv.vcv1)
 
 
 #---------------------
@@ -242,39 +202,11 @@ raw_site <- read.csv("Data/small_mammal.csv")
 # Round abundances to whole numbers
 raw_site[, 4:25] <- round(raw_site[, 4:25])
 
-# Create subsets for different disturbed land-use types (and their paired 
-# conserved sites)
-ag_pairs <- raw_site$pair_id[which(raw_site$landuse == "Agriculture")]
-pas_pairs <- raw_site$pair_id[which(raw_site$landuse == "Pastoral")]
-fen_pairs <- raw_site$pair_id[which(raw_site$landuse == "Fenced")]
-ag <- droplevels(raw_site[which(raw_site$pair_id %in% ag_pairs),])
-pas <- droplevels(raw_site[which(raw_site$pair_id %in% pas_pairs),])
-fen <- droplevels(raw_site[which(raw_site$pair_id %in% fen_pairs),])
-
 # Summarize abundance data by landuse for each species
-long_ag <- long(ag)
-
-ag_abund <- long_ag %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            Agriculture = tapply(abund, landuse, FUN = sum, na.rm = T)["Agriculture"],
-            total = sum(abund, na.rm = T))
-
-long_pas <- long(pas)
-
-pas_abund <- long_pas %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            Pastoral = tapply(abund, landuse, FUN = sum, na.rm = T)["Pastoral"],
-            total = sum(abund, na.rm = T))
-
-long_fen <- long(fen)
-
-fen_abund <- long_fen %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
-            Fenced = tapply(abund, landuse, FUN = sum, na.rm = T)["Fenced"],
-            total = sum(abund, na.rm = T))
+abundance <- abund_summ(raw_site)
 
 # Estimate habitat preference trait
-hab_prefs <- hab_pref_summ(ag_abund, fen_abund, pas_abund)
+hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Load mammal supertree
 supertree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
@@ -335,12 +267,6 @@ for(species in 1:nrow(ag_abund)){
 # Change affinities of rarely sampled species to "Rare"
 rare_sps <- colnames(raw_site[4:ncol(raw_site)])[which(apply(raw_site[, 4:ncol(raw_site)], MARGIN = 2, FUN = sum) < 30)]
 s_mamm_affin[which(s_mamm_affin[, "species"] %in% rare_sps), 2:9] <- "RARE"
-
-# Load mammal supertree
-supertree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
-
-# Create tree of sampled small mammal taxa
-phylo <- subset_supertree(raw_site, supertree, 4:25)
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
 s_mamm_affin <- s_mamm_affin[match(phylo$tip.label, s_mamm_affin[,"species"]),]
