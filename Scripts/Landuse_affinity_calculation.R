@@ -14,7 +14,9 @@ library(tidyr)
 library(ape)
 library(geiger)
 library(phytools)
+library(picante)
 source("R/habitat_preference_functions.R")
+source("R/utils.R")
 
 #==========
 # 1. Plants
@@ -283,33 +285,22 @@ fen_abund <- long_fen %>% group_by(species) %>%
 # Estimate habitat preference trait
 hab_prefs <- hab_pref_summ(ag_abund, fen_abund, pas_abund)
 
-# Reorder trait data to match order of tip labels in phylogeny
-tip_labels <- data.frame(phylo$tip.label, 1:length(phylo$tip.label))
-colnames(tip_labels) <- c("species", "order_check")
-tip_labels$species <- as.character(tip_labels$species)
-hab_pref_ord <- left_join(tip_labels, hab_prefs)
-output <- matrix(NA, nrow = ncol(hab_pref_ord) - 2, ncol = 2)
-colnames(output) <- c("K", "lambda")
-rownames(output) <- colnames(hab_pref_ord)[3:ncol(hab_pref_ord)]
-for(hab in 3:ncol(hab_pref_ord)){
-  output[hab - 2, 1] <- phylosig(phylo, hab_pref_ord[, hab], method = "K")
-  output[hab - 2, 2] <- phylosig(phylo, hab_pref_ord[, hab], method = "lambda")$lambda
-}
+# Load mammal supertree
+supertree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
 
-taxa <- phylo$tip.label
-hab_prefs$species %in% taxa
-hab_prefs$species %in% phylo$tip.label
-match(phylo$tip.label, hab_prefs$species)
-x <- hab_prefs[match(taxa, hab_prefs$species),]
-x <- hab_prefs[match(phylo$tip.label, hab_prefs$species),]
-phylosig(phylo, hab_pref_ord[, 3], method = "K", test = TRUE)
-# Compute phylogenetic signal
-phylosig(phylo, z$fenced, method = "K")
+# Create tree of sampled small mammal taxa
+phylo <- subset_supertree(raw_site, supertree, 4:25)
 
-# library(picante)
-# new_phylo <- tipShuffle(phylo)
-# new_k <- phylosig(phylo, trait, method = "K")
-# Frishkoff repeated 1000 times to get a null distribution
+# Calculate phylogenetic signal
+signal_summary <- phy_sig_summ(hab_prefs, phylo)
+
+
+
+
+
+
+
+
 
 
 
@@ -456,26 +447,6 @@ for(i in 1:nrow(aver.table)){
   num_dist_aver[i] <- sum(aver.table[i, 3:5] == "-")
 }
 100 * (sum(num_dist_aver < 3) / num_taxa) # Add value to table S3
-
-#==============================================
-# Testing for phylogenetic signal in affinities
-#==============================================
-
-agriculture <- ag_abund$Agriculture / ag_abund$total
-fenced <- fen_abund$Fenced / fen_abund$total
-pastoral <- pas_abund$Pastoral / pas_abund$total
-con_ag <- ag_abund$Conserved / ag_abund$total
-con_fen <- fen_abund$Conserved / fen_abund$total
-con_pas <- pas_abund$Conserved / pas_abund$total
-phy_sig_dat <- data.frame(agriculture, fenced, pastoral, con_ag, con_fen, con_pas)
-phy_sig_dat$conserved <- apply(phy_sig_dat[, 4:6], 1, mean, na.rm = T)
-phy_sig_dat$species <- ag_abund$species
-
-# Reorder trait data to match order of tip labels in phylogeny
-phy_sig_dat <- phy_sig_dat[match(phylo$tip.label, phy_sig_dat[,"species"]),]
-
-# Compute phylogenetic signal
-phylosig(phylo, phy_sig_dat$conserved, method = "K")
 
 #=================
 # 3. Large mammals
