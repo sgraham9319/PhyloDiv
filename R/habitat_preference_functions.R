@@ -94,3 +94,15 @@ phy_sig_summ <- function(trait_data, phylo){
   # Return output
   output
 }
+
+#=============================================
+# Convert site x species matrix to long format
+#=============================================
+
+long <- function(dat){
+  dat %>%
+    select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
+           -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
+           -soil_pc1, -soil_pc2) %>%
+    gather(species, abund, -site, -landuse, -pair_id)
+}

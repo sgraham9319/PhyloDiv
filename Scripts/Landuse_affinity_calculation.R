@@ -252,31 +252,22 @@ pas <- droplevels(raw_site[which(raw_site$pair_id %in% pas_pairs),])
 fen <- droplevels(raw_site[which(raw_site$pair_id %in% fen_pairs),])
 
 # Summarize abundance data by landuse for each species
-long_ag <- ag %>%
-  select(-longitude, -latitude, -annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
+long_ag <- long(ag)
+
 ag_abund <- long_ag %>% group_by(species) %>%
   summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
             Agriculture = tapply(abund, landuse, FUN = sum, na.rm = T)["Agriculture"],
             total = sum(abund, na.rm = T))
 
-long_pas <- pas %>%
-  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
+long_pas <- long(pas)
+
 pas_abund <- long_pas %>% group_by(species) %>%
   summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
             Pastoral = tapply(abund, landuse, FUN = sum, na.rm = T)["Pastoral"],
             total = sum(abund, na.rm = T))
 
-long_fen <- fen %>%
-  select(-longitude, - latitude, - annual_rainfall, -frac_veg, -erosion,
-         -root_dep_res_50cm, -soil_org_carb, -pH, -sand,
-         -soil_pc1, -soil_pc2) %>%
-  gather(species, abund, -site, -landuse, -pair_id)
+long_fen <- long(fen)
+
 fen_abund <- long_fen %>% group_by(species) %>%
   summarise(Conserved = tapply(abund, landuse, FUN = sum, na.rm = T)["Conserved"],
             Fenced = tapply(abund, landuse, FUN = sum, na.rm = T)["Fenced"],
