@@ -18,6 +18,7 @@ library(picante)
 library(geiger)
 library(dplyr)
 library(nlme)
+library(MuMIn)
 
 # Load functions file
 source("R/utils.R")

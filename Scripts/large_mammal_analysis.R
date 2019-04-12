@@ -17,6 +17,7 @@ library(picante)
 library(geiger)
 library(ncf)
 library(nlme)
+library(MuMIn)
 
 # Load functions file
 source("R/utils.R")
@@ -28,16 +29,19 @@ source("R/utils.R")
 # Load community data
 raw_site <- read.csv("Data/large_mammal.csv")
 
+# Change species names to match tip labels in mammal supertree
+raw_site <- match_phylo_names(raw_site)
+
 # Load mammal supertree
 supertree <- read.nexus("Data/Mammal.supertree.nexus.txt")
 
 # Create tree of sampled large mammal taxa
-large_mammal_tree <- subset_supertree(raw_site, supertree, 2:57)
+large_mammal_tree <- subset_supertree(raw_site, supertree, 7:62)
 
 # Add columns for phylogenetic diversity and species richness - warning message
 # is saying that PD could not be calculated for communities containing a
 # single species
-large_mammal <- faith_pd(raw_site, large_mammal_tree, 2:57)
+large_mammal <- faith_pd(raw_site, large_mammal_tree, 7:62)
 
 #===============
 # 2. Modeling PD
