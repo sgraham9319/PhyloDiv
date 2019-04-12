@@ -299,85 +299,43 @@ for(i in 1:nrow(aver.table)){
 # Calculating aversions and affinities
 #-------------------------------------
 
-# NOTE L_MAMM HAS COLS RANCH, TREATMENT AND YEAR THAT PLANT AND SM DON'T
-
 # Load community data
 l_mamm <- read.csv("Data/large_mammal_2.csv")
 
 # Change species names to match tip labels in mammal supertree
 l_mamm <- match_phylo_names(l_mamm)
 
-
-
-
-
-
-
-
-# Update landuse column to convert Sanctuary to Conserved and Group to Pastoral
-l_mamm$Landuse[which(l_mamm$Landuse == "Sanctuary")] <- "Conservancy"
-levels(l_mamm$Landuse)[3] <- "Pastoral"
-l_mamm$Landuse <- droplevels(l_mamm$Landuse)
-
-# Remove the species that were not observed at all
-no_obs <- which(apply(l_mamm[7:ncol(l_mamm)], MARGIN = 2, FUN = sum) == 0)
-l_mamm <- l_mamm[,-(no_obs + 6)]
-
 # Remove outlier for cow abundance
-l_mamm$Cow[which(l_mamm$Cow > 1000)] <- NA
+l_mamm$Bos_taurus[which(l_mamm$Bos_taurus > 1000)] <- NA
 
-# Summarize abundance data by land-use for each species
-l_mamm_long <- gather(l_mamm, species, abund, -Landuse, -Site, - Ranch, 
-                      -Longitude, -Latitude, -Year)
-l_mamm_abund <- l_mamm_long %>% group_by(species) %>%
-  summarise(Conserved = tapply(abund, Landuse, FUN = sum, na.rm = T)["Conservancy"],
-            Fenced = tapply(abund, Landuse, FUN = sum, na.rm = T)["Fenced"],
-            Pastoral = tapply(abund, Landuse, FUN = sum, na.rm = T)["Pastoral"],
-            total = sum(abund, na.rm = T))
+# Round abundances to whole numbers
+l_mamm[, 7:62] <- round(l_mamm[, 7:62])
 
-# Round total abundance values to whole numbers
-l_mamm_abund$totalR <- round(l_mamm_abund$total)
+# Summarize abundance data by landuse for each species
+abundance <- abund_summ_lm(l_mamm)
 
-# Create matrix to store affinity data
-l_mamm_affin <- matrix(NA, nrow = nrow(l_mamm_abund), ncol = 7)
-colnames(l_mamm_affin) <- c("species", "con_aver", "con_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
-l_mamm_affin[, "species"] <- l_mamm_abund$species
+# Identify rare species and exclude from habitat preference evaluation
+rare_sps_rows <- which(prop.table(abundance$total) < 0.001)
+abundance[, 2:5][rare_sps_rows, ] <- 0
 
-# Calculate affinities
-for(species in 1:nrow(l_mamm_abund)){
-  resamples <- matrix(NA, nrow = 999, ncol = 3)
-  colnames(resamples) <- c("Con", "Fen", "Pas")
-  for(i in 1:nrow(resamples)) {
-    resamp <- table(sample(c("Con", "Fen", "Pas"), l_mamm_abund$totalR[species], 
-                                  replace = T, prob = table(l_mamm$Landuse)/nrow(l_mamm)))
-    resamples[i, "Con"] <- resamp["Con"]
-    resamples[i, "Fen"] <- resamp["Fen"]
-    resamples[i, "Pas"] <- resamp["Pas"]
-  }
-  l_mamm_affin[species, "con_aver"] <- l_mamm_abund[species, "Conserved"] < quantile(resamples[,"Con"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "con_pref"] <- l_mamm_abund[species, "Conserved"] > quantile(resamples[,"Con"], probs = 0.975, na.rm = T)
-  l_mamm_affin[species, "fen_aver"] <- l_mamm_abund[species, "Fenced"] < quantile(resamples[,"Fen"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "fen_pref"] <- l_mamm_abund[species, "Fenced"] > quantile(resamples[,"Fen"], probs = 0.975, na.rm = T)
-  l_mamm_affin[species, "pas_aver"] <- l_mamm_abund[species, "Pastoral"] < quantile(resamples[,"Pas"], probs = 0.025, na.rm = T)
-  l_mamm_affin[species, "pas_pref"] <- l_mamm_abund[species, "Pastoral"] > quantile(resamples[,"Pas"], probs = 0.975, na.rm = T)
-}
+# Estimate habitat preference trait
+hab_prefs <- hab_pref_summ_lm(abundance)
+
+# Create tree of sampled large mammal taxa
+phylo <- subset_supertree(l_mamm, supertree, 7:62)
+
+# Calculate phylogenetic signal
+signal_summary <- phy_sig_summ(hab_prefs, phylo)
+
+# Identify significant landuse affinities and aversions
+l_mamm_affin <- affin_signif_lm(abundance)
 
 # Change affinities of rarely sampled species to "Rare"
-rare_sps <- l_mamm_abund$species[which(prop.table(l_mamm_abund$totalR) < 0.001)]
-l_mamm_affin[which(l_mamm_affin[, "species"] %in% rare_sps), 2:7] <- "RARE"
-
-# Replace common names with latin binomials
-taxa_names <- read.csv("../Data/Large_mammal_species_list.csv")
-l_mamm_affin[, "species"] <- as.character(taxa_names$Representative_in_supertree[match(l_mamm_affin[,"species"], taxa_names$Spaces_removed_name)])
-
-# Create large mammal phylogeny
-raw_com <- l_mamm[, c(3, 7:ncol(l_mamm))]
-colnames(raw_com)[-1] <- as.character(taxa_names$Representative_in_supertree[match(colnames(raw_com)[-1], taxa_names$Spaces_removed_name)])
-com <- as.matrix(t(raw_com))
-phylo <- treedata(mammal.tree, com)$phy
+l_mamm_affin[rare_sps_rows, 2:7] <- "RARE"
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
-l_mamm_affin <- l_mamm_affin[match(phylo$tip.label, l_mamm_affin[,"species"]),]
+l_mamm_affin <- l_mamm_affin[match(phylo$tip.label, l_mamm_affin[, "species"]),]
+
 
 #---------------------
 # Creating phylogenies

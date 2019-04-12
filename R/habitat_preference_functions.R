@@ -36,6 +36,28 @@ hab_pref_summ <- function(ag_dat, fen_dat, pas_dat){
   output
 }
 
+# Separate funtion required for large mammal data because these are unpaired
+
+hab_pref_summ_lm <- function(abund_dat){
+  output <- abund_dat %>%
+    select(species) %>%
+    mutate(fenced = abund_dat$Fenced / abund_dat$total,
+           fen_adj = (abund_dat$Fenced + 0.5) / (abund_dat$total + 1),
+           pastoral = abund_dat$Pastoral / abund_dat$total,
+           pas_adj = (abund_dat$Pastoral + 0.5) / (abund_dat$total + 1),
+           conserved = abund_dat$Conserved / abund_dat$total,
+           con_adj = (abund_dat$Conserved + 0.5) / (abund_dat$total + 1),
+           fenced_logit = log(fen_adj / (1 - fen_adj)),
+           pastoral_logit = log(pas_adj / (1 - pas_adj)),
+           conserved_logit = log(con_adj / (1 - con_adj))) %>%
+    select(-fen_adj, -pas_adj, -con_adj) %>%
+    as.data.frame()
+  output[which(is.na(output$fenced)), "fenced_logit"] <- NaN
+  output[which(is.na(output$pastoral)), "pastoral_logit"] <- NaN
+  output[which(is.na(output$conserved)), "conserved_logit"] <- NaN
+  output
+}
+
 #===========================================
 # Calculate p-values for phylogenetic signal
 #===========================================
@@ -57,10 +79,10 @@ phy_sig_p <- function(x, obs){
 phy_sig_summ <- function(trait_data, phylo){
   
   # Reorder trait data to match phylogeny tip labels
-  hab_prefs <- trait_data[match(phylo$tip.label, trait_data$species),]
+  trait_data <- trait_data[match(phylo$tip.label, trait_data$species),]
   
   # Extract trait names
-  traits <- colnames(hab_prefs)[2:ncol(hab_prefs)]
+  traits <- colnames(trait_data)[2:ncol(trait_data)]
   
   # Create output matrix
   output <- matrix(NA, nrow = 4, ncol = length(traits))
@@ -69,7 +91,7 @@ phy_sig_summ <- function(trait_data, phylo){
   
   # Calculate phylogenetic signal (Blomberg's K) for each trait
   for(trait in 1:length(traits)){
-    output[1, trait] <- phylosig(phylo, hab_prefs[, traits[trait]], 
+    output[1, trait] <- phylosig(phylo, trait_data[, traits[trait]], 
                                  method = "K")
   }
   
@@ -77,9 +99,9 @@ phy_sig_summ <- function(trait_data, phylo){
   no_signal_null <- matrix(NA, nrow = 1000, ncol = length(traits))
   for(iter in 1:nrow(no_signal_null)){
     new_phylo <- tipShuffle(phylo)
-    new_hab_prefs <- hab_prefs[match(new_phylo$tip.label, hab_prefs$species),]
+    new_trait_data <- trait_data[match(new_phylo$tip.label, trait_data$species),]
     for(trait in 1:length(traits)){
-      k_zero <- phylosig(new_phylo, new_hab_prefs[, traits[trait]], method = "K")
+      k_zero <- phylosig(new_phylo, new_trait_data[, traits[trait]], method = "K")
       no_signal_null[iter, trait] <- k_zero
     }
   }
@@ -89,7 +111,9 @@ phy_sig_summ <- function(trait_data, phylo){
   output[3, ] <- apply(no_signal_null, 2, sd)
   
   # Calculate p-value by comparing observed K to null distribution
-  output[4, ] <- apply(no_signal_null, 2, phy_sig_p, obs = output[1, ])
+  for(i in 1:ncol(output)){
+    output[4, i] <- phy_sig_p(no_signal_null[, i], obs = output[1, i])
+  }
   
   # Return output
   output
@@ -149,6 +173,19 @@ abund_summ <- function(comm_dat){
   total_abund
 }
 
+# Separate funtion required for large mammal data because these are unpaired
+
+abund_summ_lm <- function(comm_dat){
+  comm_dat %>%
+    select(-ranch, -treatment, -year) %>%
+    long() %>%
+    group_by(species) %>%
+    summarise(Conserved = tapply(abund, landuse, sum, na.rm = T)["Conserved"],
+              Fenced = tapply(abund, landuse, sum, na.rm = T)["Fenced"],
+              Pastoral = tapply(abund, landuse, sum, na.rm = T)["Pastoral"],
+              total = sum(abund, na.rm = T))
+}
+
 #======================================================
 # Identify significant landuse aversions and affinities
 #======================================================
@@ -197,6 +234,42 @@ affin_signif <- function(ag_dat, fen_dat, pas_dat){
     affin[species, "fen_pref"] <- fen_dat[species, "Fenced"] > quantile(resamples[, "fen"], probs = 0.975, na.rm = T)
     affin[species, "pas_aver"] <- pas_dat[species, "Pastoral"] < quantile(resamples[, "pas"], probs = 0.025, na.rm = T)
     affin[species, "pas_pref"] <- pas_dat[species, "Pastoral"] > quantile(resamples[, "pas"], probs = 0.975, na.rm = T)
+  }
+  
+  # Return output
+  affin
+}
+
+# Separate funtion required for large mammal data because these are unpaired
+
+affin_signif_lm <- function(abund_dat){
+  
+  # Create matrix to store affinity data
+  affin <- matrix(NA, nrow = nrow(abund_dat), ncol = 7)
+  colnames(affin) <- c("species", "con_aver", "con_pref", "fen_aver", "fen_pref", "pas_aver", "pas_pref")
+  affin[, "species"] <- abund_dat$species
+  
+  # Loop through taxa, calculating aversions and affinities for each
+  for(species in 1:nrow(abund_dat)){
+    resamples <- matrix(NA, nrow = 999, ncol = 3)
+    colnames(resamples) <- c("Con", "Fen", "Pas")
+    
+    # Loop through landuse types, resampling abundance for each
+    for(i in 1:nrow(resamples)) {
+      resamp <- table(sample(c("Con", "Fen", "Pas"), abund_dat$total[species], 
+                             replace = T, prob = table(l_mamm$landuse)/nrow(l_mamm)))
+      resamples[i, "Con"] <- resamp["Con"]
+      resamples[i, "Fen"] <- resamp["Fen"]
+      resamples[i, "Pas"] <- resamp["Pas"]
+    }
+    
+    # Record aversions/affinities
+    affin[species, "con_aver"] <- abund_dat[species, "Conserved"] < quantile(resamples[, "Con"], probs = 0.025, na.rm = T)
+    affin[species, "con_pref"] <- abund_dat[species, "Conserved"] > quantile(resamples[, "Con"], probs = 0.975, na.rm = T)
+    affin[species, "fen_aver"] <- abund_dat[species, "Fenced"] < quantile(resamples[, "Fen"], probs = 0.025, na.rm = T)
+    affin[species, "fen_pref"] <- abund_dat[species, "Fenced"] > quantile(resamples[, "Fen"], probs = 0.975, na.rm = T)
+    affin[species, "pas_aver"] <- abund_dat[species, "Pastoral"] < quantile(resamples[, "Pas"], probs = 0.025, na.rm = T)
+    affin[species, "pas_pref"] <- abund_dat[species, "Pastoral"] > quantile(resamples[, "Pas"], probs = 0.975, na.rm = T)
   }
   
   # Return output
