@@ -34,7 +34,7 @@ source("R/utils.R")
 raw_site <- read.csv("Data/plant.csv")
 
 # Load phylogeny
-phylo <- read.tree("Data/PlantPhylo")
+phylo <- read.tree("Data/plant_phylo")
 
 # Add columns for phylogenetic diversity and species richness
 plant <- faith_pd(raw_site, phylo, 4:151)

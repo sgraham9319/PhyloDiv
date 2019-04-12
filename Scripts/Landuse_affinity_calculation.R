@@ -43,7 +43,7 @@ abundance[[3]][, 2:4][rare_sps_rows, ] <- 0
 hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Load plant phylogeny
-phylo <- read.tree("Data/PlantPhylo")
+phylo <- read.tree("Data/plant_phylo")
 
 # Calculate phylogenetic signal
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
@@ -180,7 +180,7 @@ abundance[[3]][, 2:4][rare_sps_rows, ] <- 0
 hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Load mammal supertree
-supertree <- read.nexus("../Data/Mammal.supertree.nexus.txt")
+supertree <- read.nexus("../Data/mammal_supertree_nexus.txt")
 
 # Create tree of sampled small mammal taxa
 phylo <- subset_supertree(raw_site, supertree, 4:25)

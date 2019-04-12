@@ -31,7 +31,7 @@ source("R/utils.R")
 raw_site <- read.csv("Data/small_mammal.csv")
 
 # Load mammal supertree
-supertree <- read.nexus("Data/Mammal.supertree.nexus.txt")
+supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 
 # Create tree of sampled small mammal taxa
 small_mammal_tree <- subset_supertree(raw_site, supertree, 4:25)

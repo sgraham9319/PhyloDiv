@@ -33,7 +33,7 @@ raw_site <- read.csv("Data/large_mammal.csv")
 raw_site <- match_phylo_names(raw_site)
 
 # Load mammal supertree
-supertree <- read.nexus("Data/Mammal.supertree.nexus.txt")
+supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 
 # Create tree of sampled large mammal taxa
 large_mammal_tree <- subset_supertree(raw_site, supertree, 7:62)
