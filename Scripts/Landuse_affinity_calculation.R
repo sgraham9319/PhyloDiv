@@ -299,8 +299,20 @@ for(i in 1:nrow(aver.table)){
 # Calculating aversions and affinities
 #-------------------------------------
 
+# NOTE L_MAMM HAS COLS RANCH, TREATMENT AND YEAR THAT PLANT AND SM DON'T
+
 # Load community data
-l_mamm <- read.csv("../Data/Large_mammal_abundance.csv")
+l_mamm <- read.csv("Data/large_mammal_2.csv")
+
+# Change species names to match tip labels in mammal supertree
+l_mamm <- match_phylo_names(l_mamm)
+
+
+
+
+
+
+
 
 # Update landuse column to convert Sanctuary to Conserved and Group to Pastoral
 l_mamm$Landuse[which(l_mamm$Landuse == "Sanctuary")] <- "Conservancy"

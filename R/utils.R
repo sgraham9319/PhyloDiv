@@ -36,3 +36,15 @@ makeTransparent<-function(someColor, alpha=100)
   apply(newColor, 2, function(curcoldata){rgb(red=curcoldata[1], green=curcoldata[2],
                                               blue=curcoldata[3],alpha=alpha, maxColorValue=255)})
 }
+
+#=========================================================
+# Change large mammal taxa names to match mammal supertree
+#=========================================================
+
+match_phylo_names <- function(dat){
+  species_key <- read.csv("Data/large_mammal_species_key.csv")
+  relev_cols <- match(colnames(dat)[7:62], species_key$binomial)
+  supertree_names <- as.character(species_key$representative_in_supertree[relev_cols])
+  colnames(dat)[7:62] <- supertree_names
+  dat
+}
