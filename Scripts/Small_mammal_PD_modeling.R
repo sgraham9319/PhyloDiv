@@ -37,7 +37,7 @@ small_mammal_tree <- subset_supertree(s_mamm, supertree, 4:25)
 s_mamm <- faith_pd(s_mamm, small_mammal_tree, 4:25)
 
 # Reorder factor levels for landuse so that conserved forms intercept in models
-levels(s_mamm$landuse) <- levels(s_mamm$landuse)[c(2, 1, 3, 4)]
+s_mamm$landuse <- relevel(s_mamm$landuse, "Conserved")
 
 #=================
 # Data exploration
@@ -98,23 +98,23 @@ AICc(rand1, rand2, rand3) # rand1 (random intercepts) is best
 
 # Create models off all combinations of fixed effects
 fix1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
 fix2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall, 
-            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+            random = ~ 1 | pair_id, method = "ML", data = s_mamm)
 fix3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + 
-              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+              landuse:soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix4 <- lme(PD ~ landuse + annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
 fix5 <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
-            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+            random = ~ 1 | pair_id, method = "ML", data = s_mamm)
 fix6 <- lme(PD ~ landuse + soil_pc1 + landuse:soil_pc1,
-            random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix7 <- lme(PD ~ landuse + annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix8 <- lme(PD ~ landuse + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix9 <- lme(PD ~ annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix10 <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix11 <- lme(PD ~ annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix12 <- lme(PD ~ soil_pc1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
-fix13 <- lme(PD ~ 1, random = ~ 1 | pair_id, method = "ML", data = small_mammal)
+            random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix7 <- lme(PD ~ landuse + annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix8 <- lme(PD ~ landuse + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix9 <- lme(PD ~ annual_rainfall + soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix10 <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix11 <- lme(PD ~ annual_rainfall, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix12 <- lme(PD ~ soil_pc1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
+fix13 <- lme(PD ~ 1, random = ~ 1 | pair_id, method = "ML", data = s_mamm)
 
 # Calculate AICc for each model
 AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, fix13)
@@ -125,7 +125,7 @@ anova(fix7, fix5)
 
 # Refit final model (fix5) with REML
 final <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,
-             random = ~ 1 | pair_id, method = "REML", data = small_mammal)
+             random = ~ 1 | pair_id, method = "REML", data = s_mamm)
 
 #=================
 # Model validation

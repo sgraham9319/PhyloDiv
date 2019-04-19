@@ -30,7 +30,7 @@ phylo <- read.tree("Data/plant_phylo")
 plant <- faith_pd(plant, phylo, 4:151)
 
 # Reorder factor levels for landuse so that conserved forms intercept in models
-levels(plant$landuse) <- levels(plant$landuse)[c(2, 1, 3, 4)]
+plant$landuse <- relevel(plant$landuse, "Conserved")
 
 #=================
 # Data exploration
@@ -142,3 +142,20 @@ plot(plant$landuse, residuals(final))
 
 # Extract coefficients from final model
 summary(final)
+tapply(plant$PD, plant$landuse, mean)
+library(lme4)
+final_lme4 <- lmer(PD ~ landuse + (1 | pair_id), data = plant)
+summary(final_lme4)
+
+cons <- plant[plant$landuse == "Conserved",]
+cons$PD
+
+
+final_no_rand <- lm(PD ~ landuse, data = plant)
+summary(final_no_rand)
+tapply(plant$PD, plant$landuse, mean)
+
+ag <- plant[plant$landuse == "Agriculture", "pair_id"]
+fen <- plant[plant$landuse == "Fenced", "pair_id"]
+pas <- plant[plant$landuse == "Pastoral", "pair_id"]
+ag_con <- cons[cons$pair_id %in% ag, ]
