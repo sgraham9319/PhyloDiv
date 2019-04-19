@@ -66,15 +66,6 @@ pairs(var_mat, lower.panel = panel.smooth2,
 # Check variance inflation factors < 3 (Zuur et al. 2007)
 corvif(var_mat)
 
-# Check for absence of strong correlation among variables
-var_mat <- cbind(plant$PD, plant$annual_rainfall, plant$soil_pc1)
-colnames(var_mat) <- c("PD", "Rain", "Soil")
-pairs(var_mat, lower.panel = panel.smooth2,
-      upper.panel = panel.cor, diag.panel = panel.hist)
-
-# Check variance inflation factors < 3 (Zuur et al. 2007)
-corvif(var_mat)
-
 #=========================================
 # Selecting model random effects structure
 #=========================================
@@ -91,12 +82,12 @@ lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
 rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = small_mammal)
+               landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = s_mamm)
 rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
                landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
-             control = lmc, method = "REML", data = small_mammal)
+             control = lmc, method = "REML", data = s_mamm)
 rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = small_mammal)
+               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = s_mamm)
 
 # Determine which random effects structure is best according to AIC
 AICc(rand1, rand2, rand3) # rand1 (random intercepts) is best
