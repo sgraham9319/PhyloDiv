@@ -1,22 +1,24 @@
-#####################################
-# Determination of land-use affinites
-#####################################
+####################################
+# Evaluation of habitat associations
+####################################
 
-# This script is for the updated (9/16/2018) calculation of land-use affinities
-# following reviewer comments pointing out that we should highlight
-# any preferences for particular land-uses as well as any aversions. If we
-# only look for aversions we are ensuring that our conclusion can only be that
-# land-use change is negative, or at best neutral.
+# This script evaluates habitat associations for all taxa. It determines whether
+# each taxon exhibited a significant aversion/affinity to any land-use type and
+# also estimates phylogenetic signal in the habitat association trait
+
+# Outputs: Figure 3, Figure 4, Figure 5, Table 2, Table S4, Table S5
 
 # Load required packages
 library(dplyr)
 library(tidyr)
 library(ape)
-library(geiger)
 library(phytools)
 library(picante)
-source("R/habitat_preference_functions.R")
+library(geiger)
+
+# Load functions
 source("R/utils.R")
+source("R/habitat_preference_functions.R")
 
 #==========
 # 1. Plants
@@ -45,7 +47,7 @@ hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 # Load plant phylogeny
 phylo <- read.tree("Data/plant_phylo")
 
-# Calculate phylogenetic signal
+# Calculate phylogenetic signal - add to Table 2
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
 
 # Identify significant landuse affinities and aversions
@@ -66,7 +68,7 @@ plant_affin <- plant_affin[match(phylo$tip.label, plant_affin[,"species"]),]
 plot(phylo, type = "fan", show.tip.label = F, no.margin = T)
 
 # Create table of affinity data to be consulted when adding colored branches
-# in Illustrator
+# in Adobe Illustrator
 affin.table <- as.data.frame(plant_affin[, c(1,3,5,7,9)])
 affin.table <- affin.table %>% mutate_all(as.character)
 
@@ -124,10 +126,6 @@ aver.table[, 3][which(aver.table[, 3] == "TRUE")] <- "RED"
 aver.table[, 4][which(aver.table[, 4] == "TRUE")] <- "YELLOW"
 aver.table[, 5][which(aver.table[, 5] == "TRUE")] <- "ORANGE"
 
-# Write affinities and aversions tables to csv
-write.csv(affin.table, file = "../Data/Plot data/Plant_affinities.csv", row.names = F)
-write.csv(aver.table, file = "../Data/Plot data/Plant_aversions.csv", row.names = F)
-
 # Summarize aversion and affinity data for table S3
 num_taxa <- sum(plant_affin[, 2] != "RARE")
 raw_nums <- rep(NA, times = ncol(plant_affin))
@@ -161,16 +159,16 @@ for(i in 1:nrow(aver.table)){
 #-------------------------------------
 
 # Load community data
-raw_site <- read.csv("Data/small_mammal.csv")
+s_mamm <- read.csv("Data/small_mammal.csv")
 
 # Round abundances to whole numbers
-raw_site[, 4:25] <- round(raw_site[, 4:25])
+s_mamm[, 4:25] <- round(s_mamm[, 4:25])
 
 # Summarize abundance data by landuse for each species
-abundance <- abund_summ(raw_site)
+abundance <- abund_summ(s_mamm)
 
 # Identify rare species and exclude from habitat preference evaluation
-rare_sps <- names(which(apply(raw_site[, 1:nrow(abundance[[1]]) + 3], 2, sum) < 30))
+rare_sps <- names(which(apply(s_mamm[, 1:nrow(abundance[[1]]) + 3], 2, sum) < 30))
 rare_sps_rows <- which(abundance[[1]]$species %in% rare_sps)
 abundance[[1]][, 2:4][rare_sps_rows, ] <- 0
 abundance[[2]][, 2:4][rare_sps_rows, ] <- 0
@@ -183,9 +181,9 @@ hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 
 # Create tree of sampled small mammal taxa
-phylo <- subset_supertree(raw_site, supertree, 4:25)
+phylo <- subset_supertree(s_mamm, supertree, 4:25)
 
-# Calculate phylogenetic signal
+# Calculate phylogenetic signal - add to Table 2
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
 
 # Identify significant landuse affinities and aversions
@@ -263,10 +261,6 @@ aver.table[, 3][which(aver.table[, 3] == "TRUE")] <- "RED"
 aver.table[, 4][which(aver.table[, 4] == "TRUE")] <- "YELLOW"
 aver.table[, 5][which(aver.table[, 5] == "TRUE")] <- "ORANGE"
 
-# Write affinities and aversions tables to csv
-write.csv(affin.table, file = "../Data/Plot data/Small_mammal_affinities.csv", row.names = F)
-write.csv(aver.table, file = "../Data/Plot data/Small_mammal_aversions.csv", row.names = F)
-
 # Summarize aversion and affinity data for table S3
 num_taxa <- sum(s_mamm_affin[, 2] != "RARE")
 raw_nums <- rep(NA, times = ncol(s_mamm_affin))
@@ -324,7 +318,7 @@ hab_prefs <- hab_pref_summ_lm(abundance)
 # Create tree of sampled large mammal taxa
 phylo <- subset_supertree(l_mamm, supertree, 7:62)
 
-# Calculate phylogenetic signal
+# Calculate phylogenetic signal - add to Table 2
 signal_summary <- phy_sig_summ(hab_prefs, phylo)
 
 # Identify significant landuse affinities and aversions
@@ -335,7 +329,6 @@ l_mamm_affin[rare_sps_rows, 2:7] <- "RARE"
 
 # Reorder aversion data so they match the order of tip labels in phylogeny
 l_mamm_affin <- l_mamm_affin[match(phylo$tip.label, l_mamm_affin[, "species"]),]
-
 
 #---------------------
 # Creating phylogenies
@@ -401,10 +394,6 @@ aver.table[, 2][which(aver.table[, 2] == "TRUE")] <- "BLUE"
 aver.table[, 3][which(aver.table[, 3] == "TRUE")] <- "YELLOW"
 aver.table[, 4][which(aver.table[, 4] == "TRUE")] <- "ORANGE"
 
-# Write affinities and aversions tables to csv
-write.csv(affin.table, file = "../Data/Plot data/Large_mammal_affinities.csv", row.names = F)
-write.csv(aver.table, file = "../Data/Plot data/Large_mammal_aversions.csv", row.names = F)
-
 # Summarize aversion and affinity data for table S3
 num_taxa <- sum(l_mamm_affin[, 2] != "RARE")
 raw_nums <- rep(NA, times = ncol(l_mamm_affin))
@@ -429,9 +418,9 @@ for(i in 1:nrow(aver.table)){
 }
 100 * (sum(num_dist_aver < 2) / num_taxa) # Add value to table S3
 
-#================================
-# 4. Creating supplementary table
-#================================
+#=====================
+# 4. Creating Table S4
+#=====================
 
 # Add ag_aver and ag_pref columns to large mammal data
 l_mamm_affin <- cbind(l_mamm_affin, rep(NA, times = nrow(l_mamm_affin)), rep(NA, times = nrow(l_mamm_affin)))
@@ -448,7 +437,8 @@ affin <- data.frame(affin)
 
 # Include real name for large mammal taxa as congenerics were used when the sampled
 # species did not occur in the tree
-real_name_lm <- as.character(taxa_names$Binomial[match(l_mamm_affin[, "species"], taxa_names$Representative_in_supertree)])
+l_mamm_names <- read.csv("Data/large_mammal_species_key.csv")
+real_name_lm <- as.character(l_mamm_names$binomial[match(l_mamm_affin[, "species"], l_mamm_names$representative_in_supertree)])
 real_name_plant <- plant_affin[,"species"]
 real_name_sm <- s_mamm_affin[, "species"]
 affin$real_name <- c(real_name_plant, real_name_sm, real_name_lm)
@@ -458,7 +448,7 @@ affin$real_name <- c(real_name_plant, real_name_sm, real_name_lm)
 affin$real_name[which(affin$real_name == "Crocidura_elgonius")] <- "Crocidura spp."
 
 # Add taxonomic group identifier
-affin$Taxon <- c(rep("Plant", times = nrow(plant_affin)), 
+affin$taxon <- c(rep("Plant", times = nrow(plant_affin)), 
                  rep("Small mammal", times = nrow(s_mamm_affin)),
                  rep("Large mammal", times = nrow(l_mamm_affin)))
 
@@ -467,16 +457,12 @@ affin$real_name <- gsub(x = affin$real_name, pattern = "_", replacement = " ")
 substr(affin$real_name, 1, 1) <- toupper(substr(affin$real_name, 1, 1))
 
 # Add family information to affinities data
-family <- read.csv("../Data/Family_info_all_taxa.csv")
-affin$Family <- as.character(family$Family[match(affin$real_name, family$species)])
+family <- read.csv("Data/family_info_all_taxa.csv")
+affin$family <- as.character(family$family[match(affin$real_name, family$species)])
 
-# Add old aversion data
-affin$old_aversion <- as.character(family$Old.aversion[match(affin$real_name, family$species)])
+# Reorder columns
+tableS2 <- affin[,c(11, 10, 12, 2:9)]
 
-# Format for table S2
-tableS2 <- affin[,c(11, 10, 12, 2:9, 13)]
+# Rename species column
 colnames(tableS2)[2] <- "species"
-
-# Write to csv
-write.csv(tableS2, file = "../Data/Plot data/Table_S2.csv", row.names = F)
-# Significant preferences and aversions will be summarized manually in Excel
+# Significant preferences and aversions were summarized manually in Excel
