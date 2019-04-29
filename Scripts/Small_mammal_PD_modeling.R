@@ -2,9 +2,8 @@
 # Modeling small mammal PD
 ##########################
 
-# This script creates and interprets a generalized linear mixed effects model
-# of small mammal PD and provides results that address research question 2 of the
-# manuscript
+# This script creates and interprets the generalized linear mixed effects model
+# of small mammal PD
 
 # Outputs: Figure 2a
 
@@ -81,13 +80,16 @@ corvif(var_mat)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = s_mamm)
-rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 | pair_id, method = "REML", data = s_mamm)
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + annual_rainfall | pair_id, 
              control = lmc, method = "REML", data = s_mamm)
-rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = s_mamm)
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = s_mamm)
 
 # Determine which random effects structure is best according to AIC
 AICc(rand1, rand2, rand3) # rand1 (random intercepts) is best
@@ -121,7 +123,7 @@ AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, 
 
 # Compare best model (fix5) to more complex model with similar AICc (fix7) using
 # likelihood ratio test
-anova(fix7, fix5)
+anova(fix7, fix5) # Significant difference, use more complex model (fix5)
 
 # Refit final model (fix5) with REML
 final <- lme(PD ~ landuse + annual_rainfall+ landuse:annual_rainfall,

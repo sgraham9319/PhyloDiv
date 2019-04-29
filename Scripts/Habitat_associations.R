@@ -180,7 +180,7 @@ abundance[[3]][, 2:4][rare_sps_rows, ] <- 0
 hab_prefs <- hab_pref_summ(abundance[[1]], abundance[[2]], abundance[[3]])
 
 # Load mammal supertree
-supertree <- read.nexus("../Data/mammal_supertree_nexus.txt")
+supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 
 # Create tree of sampled small mammal taxa
 phylo <- subset_supertree(raw_site, supertree, 4:25)
@@ -300,7 +300,7 @@ for(i in 1:nrow(aver.table)){
 #-------------------------------------
 
 # Load community data
-l_mamm <- read.csv("Data/large_mammal_2.csv")
+l_mamm <- read.csv("Data/large_mammal.csv")
 
 # Change species names to match tip labels in mammal supertree
 l_mamm <- match_phylo_names(l_mamm)

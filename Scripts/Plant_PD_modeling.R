@@ -2,9 +2,8 @@
 # Modeling plant PD
 ###################
 
-# This script creates and interprets a generalized linear mixed effects model
-# of plant PD and provides results that address research question 2 of the
-# manuscript
+# This script creates and interprets the generalized linear mixed effects model
+# of plant PD
 
 # Load required packages
 library(ape)
@@ -74,13 +73,16 @@ corvif(var_mat)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 | pair_id, method = "REML", data = plant)
-rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + annual_rainfall | pair_id, 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 | pair_id, method = "REML", data = plant)
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + annual_rainfall | pair_id, 
              control = lmc, method = "REML", data = plant)
-rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = plant)
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + soil_pc1 | pair_id, method = "REML", data = plant)
 
 # Determine which random effects structure is best according to AIC
 AICc(rand1, rand2, rand3) # rand1 (random intercepts) is best
@@ -114,8 +116,8 @@ AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, 
 
 # Compare best model (fix10) to models with similar AICc (fix7, fix8) using
 # likelihood ratio tests
-anova(fix10, fix7)
-anova(fix10, fix8)
+anova(fix10, fix7) # No difference, use simpler model (fix10)
+anova(fix10, fix8) # No difference, use simpler model (fix10)
 
 # Refit final model with REML
 final <- lme(PD ~ landuse, random = ~ 1 | pair_id, method = "REML", data = plant)
@@ -142,20 +144,3 @@ plot(plant$landuse, residuals(final))
 
 # Extract coefficients from final model
 summary(final)
-tapply(plant$PD, plant$landuse, mean)
-library(lme4)
-final_lme4 <- lmer(PD ~ landuse + (1 | pair_id), data = plant)
-summary(final_lme4)
-
-cons <- plant[plant$landuse == "Conserved",]
-cons$PD
-
-
-final_no_rand <- lm(PD ~ landuse, data = plant)
-summary(final_no_rand)
-tapply(plant$PD, plant$landuse, mean)
-
-ag <- plant[plant$landuse == "Agriculture", "pair_id"]
-fen <- plant[plant$landuse == "Fenced", "pair_id"]
-pas <- plant[plant$landuse == "Pastoral", "pair_id"]
-ag_con <- cons[cons$pair_id %in% ag, ]

@@ -8,7 +8,7 @@
 # across each plot pair and decomposes this value into its turnover and 
 # nestedness components
 
-# Outputs: Figure 6, Table S4
+# Outputs: Figure 6, Table S6
 
 # Load required packages
 library(ape)

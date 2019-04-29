@@ -2,11 +2,10 @@
 # Modeling large mammal PD
 ##########################
 
-# This script creates and interprets a generalized linear mixed effects model
-# of large mammal PD and provides results that address research question 2 of the
-# manuscript
+# This script creates and interprets the generalized linear mixed effects model
+# of large mammal PD
 
-# Outputs: Figure 2b, Figure S2
+# Outputs: Figure 2b, Figure S3
 
 # Load required packages
 library(ape)
@@ -82,13 +81,16 @@ corvif(var_mat)
 lmc <- lmeControl(niterEM = 5200, msMaxIter = 5200)
 
 # Create models
-rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 | ranch, method = "REML", data = l_mamm)
-rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + annual_rainfall | ranch, 
+rand1 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 | ranch, method = "REML", data = l_mamm)
+rand2 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + annual_rainfall | ranch, 
              method = "REML", data = l_mamm)
-rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-               landuse:soil_pc1, random = ~ 1 + soil_pc1 | ranch,
+rand3 <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+               landuse:annual_rainfall + landuse:soil_pc1,
+             random = ~ 1 + soil_pc1 | ranch,
              control = lmc, method = "REML", data = l_mamm)
 
 # Determine which random effects structure is best according to AIC
@@ -110,8 +112,9 @@ plot(fit1$mean.of.class, fit1$correlation, xlab = "Distance (km)", ylab = "Moran
 # just under 0.5.
 
 # Now create full model and check residuals for SAC
-full_mod <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
-                  landuse:soil_pc1, random = ~ 1 | ranch, method = "ML", data = l_mamm)
+full_mod <- lme(PD ~ landuse + annual_rainfall + soil_pc1 +
+                  landuse:annual_rainfall + landuse:soil_pc1,
+                random = ~ 1 | ranch, method = "ML", data = l_mamm)
 fit2 <- correlog(x = l_mamm$longitude, y = l_mamm$latitude,
                  z = residuals(full_mod), increment = 1, resamp = 500, latlon = TRUE)
 plot(fit2$mean.of.class, fit2$correlation, xlab = "Distance (km)", 
@@ -148,7 +151,7 @@ AICc(fix1, fix2, fix3, fix4, fix5, fix6, fix7, fix8, fix9, fix10, fix11, fix12, 
 
 # Compare best model (fix1) to model with similar AICc (fix2) using
 # likelihood ratio test
-anova(fix2, fix1)
+anova(fix2, fix1) # Significant difference, use more complex model (fix1)
 
 # Refit final model with REML
 final <- lme(PD ~ landuse + annual_rainfall + soil_pc1 + landuse:annual_rainfall + 
@@ -229,7 +232,7 @@ lines(PArain, PAconf[,2], lty=2, col = "tan2", lwd = 2)
 lines(PArain, PAconf[,3], lty=2, col = "tan2", lwd = 2)
 
 #=================
-# Create Figure S2
+# Create Figure S3
 #=================
 
 # Create plot

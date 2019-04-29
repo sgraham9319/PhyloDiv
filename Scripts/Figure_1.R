@@ -11,17 +11,17 @@ small_mammal <- read.csv("Data/small_mammal.csv", stringsAsFactors = F)
 large_mammal <- read.csv("Data/large_mammal.csv", stringsAsFactors = F)
 
 # Load phylogenies
-plant_phylo <- read.tree("Data/PlantPhylo")
-mammal_supertree <- read.nexus("Data/Mammal.supertree.nexus.txt")
+plant_phylo <- read.tree("Data/plant_phylo")
+mammal_supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 
 # Create phylogenies of sampled small mammal and large mammal taxa
 small_mammal_phylo <- subset_supertree(small_mammal, mammal_supertree, 4:25)
-large_mammal_phylo <- subset_supertree(large_mammal, mammal_supertree, 2:57)
+large_mammal_phylo <- subset_supertree(large_mammal, mammal_supertree, 7:62)
 
 # Calculate phylogenetic diversity
 plant <- faith_pd(plant, plant_phylo, 4:151)
 small_mammal <- faith_pd(small_mammal, small_mammal_phylo, 4:25)
-large_mammal <- faith_pd(large_mammal, large_mammal_phylo, 2:57)
+large_mammal <- faith_pd(large_mammal, large_mammal_phylo, 7:62)
 
 
 # 
