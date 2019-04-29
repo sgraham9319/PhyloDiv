@@ -1,3 +1,17 @@
+#############################
+# Creating main text Figure 1
+#############################
+
+# This script creates Figure 1 of the manuscript which presents the PD data
+# for each organismal group, broken down by landuse type
+
+# Outputs: Figure 1
+
+# Load required packages
+library(ape)
+library(dplyr)
+library(geiger)
+library(picante)
 
 # Load functions file
 source("R/utils.R")
@@ -18,23 +32,26 @@ mammal_supertree <- read.nexus("Data/mammal_supertree_nexus.txt")
 small_mammal_phylo <- subset_supertree(small_mammal, mammal_supertree, 4:25)
 large_mammal_phylo <- subset_supertree(large_mammal, mammal_supertree, 7:62)
 
-# Calculate phylogenetic diversity
+# Calculate phylogenetic diversity - warnings for small and large mammal
+# calculations explain that PD could not be calculated for communities
+# containing a single species
 plant <- faith_pd(plant, plant_phylo, 4:151)
 small_mammal <- faith_pd(small_mammal, small_mammal_phylo, 4:25)
 large_mammal <- faith_pd(large_mammal, large_mammal_phylo, 7:62)
 
-
-# 
+# Combine PD data for all three organismal groups
 org_group <- rep(c("plant", "s_mamm", "l_mamm"),
                  times = c(nrow(plant), nrow(small_mammal), nrow(large_mammal)))
 landuse <- c(plant$landuse, small_mammal$landuse, large_mammal$landuse)
 PD <- c(plant$PD, small_mammal$PD, large_mammal$PD)
 comb_dat <- data.frame(org_group, landuse, PD)
 
+# Add treatment data
 comb_dat$treatment <- paste(comb_dat$org_group, comb_dat$landuse, sep = "_")
 
+# Convert treatment to factor and order for plotting
 comb_dat$treatment <- factor(comb_dat$treatment, levels = c("plant_Conserved",
-                                                            "s_mamm_Conserved",
+                                                           "s_mamm_Conserved",
                                                             "l_mamm_Conserved",
                                                             "plant_Agriculture",
                                                             "s_mamm_Agriculture", 
