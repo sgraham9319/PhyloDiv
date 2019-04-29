@@ -1,0 +1,57 @@
+common_name,order,family,binomial,representative_in_supertree,notes
+Aardvark,Tubulidentata,Orycteropodidae,Orycteropus_afer,Orycteropus_afer,
+Aardwolf,Carnivora,Hyaenidae,Proteles_cristata,Proteles_cristatus,Only this synonym appeared in mammal supertree
+African buffalo,Artiodactyla,Bovidae,Syncerus_caffer,Syncerus_caffer,
+African civet,Carnivora,Viverridae,Civettictis_civetta,Civettictis_civetta,
+Beisa oryx,Artiodactyla,Bovidae,Oryx_beisa,Oryx_dammah,O. beisa did not appear in mammal supertree so this congeneric species was used
+Black-backed jackal,Carnivora,Canidae,Canis_mesomelas,Canis_mesomelas,
+Black Rhinoceros,Perissodactyla,Rhinocerotidae,Diceros_bicornis,Diceros_bicornis,
+Bush Duiker,Artiodactyla,Bovidae,Sylvicapra_grimmia,Sylvicapra_grimmia,
+Bush pig,Artiodactyla,Suidae,Potamochoerus_larvatus,Potamochoerus_larvatus,
+Bushbuck,Artiodactyla,Bovidae,Tragelaphus_sp,Tragelaphus_scriptus,Bushbuck could refer to T. scriptus or T. sylvaticus but only T. scriptus appeared in the supertree so this name was used
+Caracal,Carnivora,Felidae,Caracal_caracal,Caracal_caracal,
+Cheetah,Carnivora,Felidae,Acinonyx_jubatus,Acinonyx_jubatus,
+Common genet,Carnivora,Viverridae,Genetta_genetta,Genetta_genetta,
+Common warthog,Artiodactyla,Suidae,Phacochoerus_africanus,Phacochoerus_africanus,
+Common zebra,Perissodactyla,Equidae,Equus_quagga,Equus_burchellii,Only this synonym appeared in the supertree
+Crested porcupine,Rodentia,Hystricidae,Hystrix_cristata,Hystrix_cristata,"Although a rodent, this species was not included in small mammal analysis so was included in large mammal analysis"
+Dwarf mongoose,Carnivora,Herpestidae,Helogale_parvula,Helogale_parvula,
+Eland,Artiodactyla,Bovidae,Taurotragus_sp,Taurotragus_derbianus,Eland could refer to T. oryx (common eland) or T. derbianus (giant eland); T. derbianus was chosen at random
+Elephant,Proboscidea,Elephantidae,Loxodonta_sp,Loxodonta_africana,African elephant could refer to L. africana (African bush elephant) or L. cyclotis (African forest elephant); L. africana was chosen at random
+Gerenuck,Artiodactyla,Bovidae,Litocranius_walleri,Litocranius_walleri,
+Giraffe,Artiodactyla,Giraffidae,Giraffa_camelopardalis,Giraffa_camelopardalis,
+Grant's gazelle,Artiodactyla,Bovidae,Nanger_granti,Gazella_granti,Only this synonym appeared in the supertree
+Greater kudu,Artiodactyla,Bovidae,Tragelaphus_strepsiceros,Tragelaphus_strepsiceros,
+Grevy's zebra,Perissodactyla,Equidae,Equus_grevyi,Equus_grevyi,
+Guenther's dikdik,Artiodactyla,Bovidae,Madoqua_guentheri,Madoqua_guentheri,
+Honey Badger,Carnivora,Mustelidae,Mellivora_capensis,Mellivora_capensis,
+Hippopotamus,Artiodactyla,Hippopotamidae,Hippopotamus_amphibius,Hippopotamus_amphibius,
+Impala,Artiodactyla,Bovidae,Aepyceros_melampus,Aepyceros_melampus,
+Klipsinger,Artiodactyla,Bovidae,Oreotragus_oreotragus,Oreotragus_oreotragus,
+Hartebeest,Artiodactyla,Bovidae,Alcelaphus_buselaphus,Alcelaphus_buselaphus,
+Leopard,Carnivora,Felidae,Panthera_pardus,Panthera_pardus,
+Lion,Carnivora,Felidae,Panthera_leo,Panthera_leo,
+Olive Baboon,Primates,Cercopithecidae,Papio_anubis,Papio_hamadryas,Only this synonym appeared in the supertree
+Patas Monkey,Primates,Cercopithecidae,Erythrocebus_patas,Erythrocebus_patas,
+Rock Hyrax,Hyracoidea,Procaviidae,Procavia_capensis,Procavia_capensis,
+Scrub hare,Lagomorpha,Leporidae,Lepus_saxatilis,Lepus_saxatilis,
+Serval cat,Carnivora,Felidae,Leptailurus_serval,Leptailurus_serval,
+Slender mongoose,Carnivora,Herpestidae,Galerella_sanguinea,Galerella_sanguinea,
+Spotted hyaena,Carnivora,Hyaenidae,Crocuta_crocuta,Crocuta_crocuta,
+Steinbuck,Artiodactyla,Bovidae,Raphicerus_campestris,Raphicerus_campestris,
+Striped ground squirrel,Rodentia,Sciuridae,Xerus_erythropus,Xerus_erythropus,"Although a rodent, this species was not included in small mammal analysis so was included in large mammal analysis"
+Striped hyaena,Carnivora,Hyaenidae,Hyaena_hyaena,Hyaena_hyaena,
+Thompson's gazelle,Artiodactyla,Bovidae,Eudorcas_thomsonii,Gazella_thomsonii,Only this synonym appeared in the supertree
+Vervet Monkey,Primates,Cercopithecidae,Chlorocebus_pygerythrus,Chlorocebus_aethiops,C. pygerythrus did not appear in supertree so a random species of this genus that did appear was used instead
+Waterbuck,Artiodactyla,Bovidae,Kobus_ellipsiprymnus,Kobus_ellipsiprymnus,
+White-tailed mongoose,Carnivora,Herpestidae,Ichneumia_albicauda,Ichneumia_albicauda,
+White Rhinoceros,Perissodactyla,Rhinocerotidae,Ceratotherium_simum,Ceratotherium_simum,
+Wild cat,Carnivora,Felidae,Felis_sylvestris,Felis_silvestris,Only this synonym appeared in the supertree
+African wild dog,Carnivora,Canidae,Lycaon_pictus,Lycaon_pictus,
+Zorilla,Carnivora,Mustelidae,Ictonyx_striatus,Ictonyx_striatus,
+Domestic cattle,Artiodactyla,Bovidae,Bos_taurus,Bos_taurus,
+Dromedary,Artiodactyla,Camelidae,Camelus_dromedarius,Camelus_dromedarius,
+Domestic goat,Artiodactyla,Bovidae,Capra_hircus,Capra_hircus,
+Donkey,Perissodactyla,Equidae,Equus_asinus,Equus_asinus,
+Horse,Perissodactyla,Equidae,Equus_caballus,Equus_caballus,
+Domestic sheep,Artiodactyla,Bovidae,Ovis_aries,Ovis_aries,
